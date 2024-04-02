@@ -1,4 +1,4 @@
-package pocket
+package main
 
 const (
 	Version = "v0.0.0"

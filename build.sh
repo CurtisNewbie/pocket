@@ -1,0 +1,1 @@
+go build  -tags='excl_mysql,excl_consul' .
