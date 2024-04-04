@@ -16,8 +16,7 @@ const (
 )
 
 var (
-	app  *tview.Application
-	page int = 0
+	app *tview.Application
 )
 
 type Pocket struct {
@@ -35,6 +34,8 @@ func (p *Pocket) ToPage(page string) {
 func NewListPage(pocket *Pocket) tview.Primitive {
 	liv := NewListView(pocket)
 	options := NewOptionList().
+		AddItem("Create", "", 'c', func() {
+		}).
 		AddItem("Search", "", '/', func() {
 			EditSearchPage(liv, pocket.Pages)
 		}).
@@ -42,13 +43,13 @@ func NewListPage(pocket *Pocket) tview.Primitive {
 			app.SetFocus(liv.content)
 		}).
 		AddItem("Next", "", 'n', func() {
-			page += 1
-			liv.page.SetText(cast.ToString(page))
+			pocket.ListInfoView.pageNum += 1
+			liv.page.SetText(cast.ToString(pocket.ListInfoView.pageNum))
 		}).
 		AddItem("Prev", "", 'N', func() {
-			if page > 1 {
-				page -= 1
-				liv.page.SetText(cast.ToString(page))
+			if pocket.ListInfoView.pageNum > 1 {
+				pocket.ListInfoView.pageNum -= 1
+				liv.page.SetText(cast.ToString(pocket.ListInfoView.pageNum))
 			}
 		}).
 		AddItem("Exit", "", 'q', func() { app.Stop() })
@@ -120,11 +121,7 @@ func NewDetailPage(pocket *Pocket) tview.Primitive {
 	vw := NewDetailView(app)
 	pocket.DetailView = vw
 	options := NewOptionList().
-		AddItem("Create", "", 'c', func() {
-		}).
 		AddItem("Edit", "", 'e', func() {
-		}).
-		AddItem("Search", "", '/', func() {
 		}).
 		AddItem("Unmask", "", 'u', func() {
 		}).
@@ -245,7 +242,7 @@ func NewDetailView(app *tview.Application) (iv *DetailView) {
 	topFlex.AddItem(iv.bar, 3, 1, false)
 
 	tb := tview.NewTable()
-	tb.SetBorder(true).SetTitle(" Info ")
+	tb.SetBorder(true).SetTitle(" Searching Parameters ")
 
 	tb.SetCellSimple(0, 1, "Name:")
 	tb.GetCell(0, 1).SetAlign(tview.AlignRight)
@@ -294,6 +291,8 @@ type ListView struct {
 	desc    *tview.TableCell
 	page    *tview.TableCell
 	content *tview.Flex
+
+	pageNum int
 }
 
 type ListItem struct {
