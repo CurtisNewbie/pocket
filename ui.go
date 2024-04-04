@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/curtisnewbie/miso/miso"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/spf13/cast"
@@ -17,12 +16,10 @@ const (
 
 // TODO: merges the view and options together as single value
 type Pocket struct {
-	App           *tview.Application
-	Pages         *tview.Pages
-	ListView      *ListView
-	ListOptions   *tview.List
-	DetailView    *DetailView
-	DetailOptions *tview.List
+	App        *tview.Application
+	Pages      *tview.Pages
+	DetailPage *DetailPage
+	ListPage   *ListPage
 }
 
 func (p *Pocket) ToPage(page string) {
@@ -37,55 +34,80 @@ func (p *Pocket) Stop() {
 	p.App.Stop()
 }
 
-func NewListPage(pocket *Pocket) tview.Primitive {
-	liv := NewListView(pocket)
-	options := NewOptionList().
-		AddItem("Create", "", 'c', func() {
+type ListPage struct {
+	*tview.Flex
+	Options *tview.List
+	View    *ListView
+}
+
+func (l *ListPage) SetPage(n int) {
+	l.View.pageNum = n
+}
+
+func (l *ListPage) GetPage() int {
+	return l.View.pageNum
+}
+
+func (l *ListPage) AddPage(delta int) int {
+	l.View.pageNum += delta
+	return l.View.pageNum
+}
+
+func NewListPage(pocket *Pocket) *ListPage {
+	lp := new(ListPage)
+	lv := NewListView(pocket)
+	opt := NewOptionList().
+		AddItem("Create Item", "", 'c', func() {
 		}).
-		AddItem("Search", "", '/', func() {
-			EditSearchPage(liv, pocket.Pages)
+		AddItem("Search Param", "", '/', func() {
+			EditSearchPage(lv, pocket.Pages)
 		}).
-		AddItem("Select", "", 's', func() {
-			pocket.App.SetFocus(liv.content)
+		AddItem("Select Item", "", 's', func() {
+			c := lv.content.GetItemCount()
+			if c < 1 {
+				pocket.App.SetFocus(lv.content)
+			} else {
+				pocket.App.SetFocus(lv.content.GetItem(0))
+			}
 		}).
-		AddItem("Next", "", 'n', func() {
-			pocket.ListView.pageNum += 1
-			liv.page.SetText(cast.ToString(pocket.ListView.pageNum))
+		AddItem("Next Page", "", 'n', func() {
+			pocket.ListPage.AddPage(1)
+			lv.page.SetText(cast.ToString(pocket.ListPage.View))
 		}).
-		AddItem("Prev", "", 'N', func() {
-			if pocket.ListView.pageNum > 1 {
-				pocket.ListView.pageNum -= 1
-				liv.page.SetText(cast.ToString(pocket.ListView.pageNum))
+		AddItem("Prev Page", "", 'N', func() {
+			if pocket.ListPage.GetPage() > 1 {
+				n := pocket.ListPage.AddPage(-1)
+				lv.page.SetText(cast.ToString(n))
 			}
 		}).
 		AddItem("Exit", "", 'q', func() { pocket.Stop() })
 
-	pocket.ListView = liv
-	pocket.ListOptions = options
-
-	p := NewContentPlane(options, liv.flex)
+	cp := NewContentPlane(opt, lv.flex)
 
 	// TODO: demo
 	go func() {
-		liv.name.SetText(`Goody`)
-		liv.AddItem(ListItem{
+		lv.name.SetText(`Goody`)
+		lv.AddItem(ListItem{
 			id:   1,
 			name: "yo",
 			desc: "yo it's me",
 		})
-		liv.AddItem(ListItem{
+		lv.AddItem(ListItem{
 			id:   2,
 			name: "yo",
 			desc: "yo it's me",
 		})
-		liv.AddItem(ListItem{
+		lv.AddItem(ListItem{
 			id:   3,
 			name: "yo",
 			desc: "yo it's me",
 		})
-		// liv.desc.SetText(`Very good stuff`)
 	}()
-	return p
+
+	lp.Options = opt
+	lp.View = lv
+	lp.Flex = cp
+	return lp
 }
 
 func EditSearchPage(liv *ListView, pages *tview.Pages) {
@@ -124,7 +146,14 @@ func createPopup(pages *tview.Pages, form tview.Primitive, height int, width int
 	return modal
 }
 
-func NewDetailPage(pocket *Pocket) tview.Primitive {
+type DetailPage struct {
+	*tview.Flex
+	Options *tview.List
+	View    *DetailView
+}
+
+func NewDetailPage(pocket *Pocket) *DetailPage {
+	dp := new(DetailPage)
 	vw := NewDetailView(pocket)
 	options := NewOptionList().
 		AddItem("Edit", "", 'e', func() {
@@ -137,22 +166,12 @@ func NewDetailPage(pocket *Pocket) tview.Primitive {
 			pocket.Pages.SwitchToPage(PageList)
 		})
 
-	pocket.DetailView = vw
-	pocket.DetailOptions = options
 	p := NewContentPlane(options, vw.flex)
 
-	// TODO: demo
-	go func() {
-		pocket.QueueCommand(func() {
-			vw.bar.SetText(`Hello World!!!!`)
-			vw.name.SetText(`Goody`)
-			vw.content.SetText(`Very good stuff Very good stuff Very good stuff Very good stuff`)
-			vw.ctime.SetText(miso.Now().FormatClassic())
-			vw.utime.SetText(miso.Now().FormatClassic())
-			vw.desc.SetText(`Very good stuff`)
-		})
-	}()
-	return p
+	dp.Flex = p
+	dp.Options = options
+	dp.View = vw
+	return dp
 }
 
 func NewApp() *tview.Application {
@@ -164,7 +183,10 @@ func NewApp() *tview.Application {
 	}
 
 	detailPage := NewDetailPage(pocket)
+	pocket.DetailPage = detailPage
+
 	listPage := NewListPage(pocket)
+	pocket.ListPage = listPage
 
 	pages.AddPage(PageDetail, detailPage, true, true)
 	pages.AddPage(PageList, listPage, true, true)
@@ -361,7 +383,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
 		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' {
-			pocket.App.SetFocus(pocket.ListOptions)
+			pocket.App.SetFocus(pocket.ListPage.Options)
 			return nil
 		}
 
@@ -372,7 +394,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 				lip := itm.(*ListItemPrimitive)
 
 				// TODO: should be a database lookup
-				pocket.DetailView.Display(ListItem{
+				pocket.DetailPage.View.Display(ListItem{
 					id:   lip.id,
 					name: lip.name,
 					desc: lip.desc,
