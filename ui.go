@@ -15,6 +15,7 @@ const (
 	PageSearch = "search"
 )
 
+// TODO: merges the view and options together as single value
 type Pocket struct {
 	App           *tview.Application
 	Pages         *tview.Pages
@@ -360,7 +361,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
 		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' {
-			pocket.App.SetFocus(pocket.DetailOptions)
+			pocket.App.SetFocus(pocket.ListOptions)
 			return nil
 		}
 
@@ -391,14 +392,10 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 				case 'j':
 					if i < l-1 {
 						pocket.App.SetFocus(iv.content.GetItem(i + 1))
-					} else {
-						pocket.App.SetFocus(iv.content.GetItem(0))
 					}
 				case 'k':
 					if i > 0 {
 						pocket.App.SetFocus(iv.content.GetItem(i - 1))
-					} else {
-						pocket.App.SetFocus(iv.content.GetItem(l - 1))
 					}
 				}
 			} else if l > 0 {
