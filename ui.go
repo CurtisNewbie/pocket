@@ -17,17 +17,25 @@ const (
 
 var (
 	app                *tview.Application
-	page               int = 0
-	resetListPageFocus func()
+	page               int    = 0
+	resetListPageFocus func() = func() {}
 )
 
-func NewListPage(app *tview.Application, pages *tview.Pages) tview.Primitive {
-	liv := NewListInfoView(app)
+type Pocket struct {
+	App          *tview.Application
+	Pages        *tview.Pages
+	ListInfoView *ListView
+	DetailView   *DetailView
+}
+
+func NewListPage(pocket *Pocket) tview.Primitive {
+	liv := NewListView(pocket)
+	pocket.ListInfoView = liv
 	options := NewOptionList().
 		AddItem("Search", "", '/', func() {
-			EditSearchPage(liv, pages)
+			EditSearchPage(liv, pocket.Pages)
 		}).
-		AddItem("Select", "", 0, func() {
+		AddItem("Select", "", 's', func() {
 			app.SetFocus(liv.content)
 		}).
 		AddItem("Next", "", 'n', func() {
@@ -69,7 +77,7 @@ func NewListPage(app *tview.Application, pages *tview.Pages) tview.Primitive {
 	return p
 }
 
-func EditSearchPage(liv *ListInfoView, pages *tview.Pages) {
+func EditSearchPage(liv *ListView, pages *tview.Pages) {
 	closePopup := func() {
 		pages.SwitchToPage(PageList)
 		pages.RemovePage(PageSearch)
@@ -103,8 +111,9 @@ func createPopup(pages *tview.Pages, form tview.Primitive, height int, width int
 	return modal
 }
 
-func NewDetailPage(app *tview.Application, pages *tview.Pages) tview.Primitive {
-	infv := NewInfoView(app)
+func NewDetailPage(pocket *Pocket) tview.Primitive {
+	vw := NewDetailView(app)
+	pocket.DetailView = vw
 	options := NewOptionList().
 		AddItem("Create", "", 'c', func() {
 		}).
@@ -116,21 +125,24 @@ func NewDetailPage(app *tview.Application, pages *tview.Pages) tview.Primitive {
 		}).
 		AddItem("Mask", "", 'm', func() {
 		}).
+		AddItem("To List Page", "", 'l', func() {
+			pocket.Pages.SwitchToPage(PageList)
+		}).
 		AddItem("Exit", "", 'q', func() {
 			app.Stop()
 		})
 
-	p := NewContentPlane(options, infv.flex)
+	p := NewContentPlane(options, vw.flex)
 
 	// TODO: demo
 	go func() {
 		QueueCommand(func() {
-			infv.bar.SetText(`Hello World!!!!`)
-			infv.name.SetText(`Goody`)
-			infv.content.SetText(`Very good stuff Very good stuff Very good stuff Very good stuff`)
-			infv.ctime.SetText(miso.Now().FormatClassic())
-			infv.utime.SetText(miso.Now().FormatClassic())
-			infv.desc.SetText(`Very good stuff`)
+			vw.bar.SetText(`Hello World!!!!`)
+			vw.name.SetText(`Goody`)
+			vw.content.SetText(`Very good stuff Very good stuff Very good stuff Very good stuff`)
+			vw.ctime.SetText(miso.Now().FormatClassic())
+			vw.utime.SetText(miso.Now().FormatClassic())
+			vw.desc.SetText(`Very good stuff`)
 		})
 	}()
 	return p
@@ -139,9 +151,14 @@ func NewDetailPage(app *tview.Application, pages *tview.Pages) tview.Primitive {
 func NewApp() *tview.Application {
 	app = tview.NewApplication()
 	pages := tview.NewPages()
+	pocket := &Pocket{
+		App:   app,
+		Pages: pages,
+	}
 
-	detailPage := NewDetailPage(app, pages)
-	listPage := NewListPage(app, pages)
+	detailPage := NewDetailPage(pocket)
+	listPage := NewListPage(pocket)
+
 	pages.AddPage(PageDetail, detailPage, true, true)
 	pages.AddPage(PageList, listPage, true, true)
 	pages.SwitchToPage(PageList)
@@ -189,7 +206,7 @@ func NewOptionList() *tview.List {
 	return l
 }
 
-type InfoView struct {
+type DetailView struct {
 	app  *tview.Application
 	flex *tview.Flex
 
@@ -201,14 +218,19 @@ type InfoView struct {
 	content *tview.TextView
 }
 
+func (d *DetailView) Display(li ListItem) {
+	d.name.SetText(li.name)
+	d.desc.SetText(li.desc)
+}
+
 func QueueCommand(f func()) {
 	app.QueueUpdateDraw(f)
 }
 
-func NewInfoView(app *tview.Application) (iv *InfoView) {
+func NewDetailView(app *tview.Application) (iv *DetailView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
-	iv = &InfoView{}
+	iv = &DetailView{}
 	iv.app = app
 
 	iv.bar = tview.NewTextView()
@@ -258,7 +280,7 @@ func NewInfoView(app *tview.Application) (iv *InfoView) {
 	return iv
 }
 
-type ListInfoView struct {
+type ListView struct {
 	app  *tview.Application
 	flex *tview.Flex
 
@@ -275,8 +297,17 @@ type ListItem struct {
 	desc string
 }
 
-func (l *ListInfoView) AddItem(itm ListItem) {
+type ListItemPrimitive struct {
+	*tview.Table
+	id   int
+	name string
+	desc string
+}
+
+func (l *ListView) AddItem(itm ListItem) {
 	tb := tview.NewTable()
+	lip := new(ListItemPrimitive)
+	lip.Table = tb
 	tb.SetBorder(true)
 
 	tb.SetCellSimple(0, 0, "Id:")
@@ -293,13 +324,13 @@ func (l *ListInfoView) AddItem(itm ListItem) {
 	tb.GetCell(2, 0).SetAlign(tview.AlignRight)
 	descc := tview.NewTableCell(itm.desc)
 	tb.SetCell(2, 1, descc)
-	l.content.AddItem(tb, 5, 1, false)
+	l.content.AddItem(lip, 5, 1, false)
 }
 
-func NewListInfoView(app *tview.Application) (iv *ListInfoView) {
+func NewListView(pocket *Pocket) (iv *ListView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
-	iv = &ListInfoView{}
+	iv = &ListView{}
 	iv.app = app
 
 	iv.bar = tview.NewTextView()
@@ -335,8 +366,25 @@ func NewListInfoView(app *tview.Application) (iv *ListInfoView) {
 	iv.content.SetBorder(true).SetTitle(" Records ")
 
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
-		if evt.Key() == tcell.KeyExit {
-			resetListPageFocus() // TODO: Not working
+		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' {
+			resetListPageFocus()
+			return nil
+		}
+
+		if evt.Key() == tcell.KeyEnter {
+			j, ok := FindFocus(iv.content)
+			if ok {
+				itm := iv.content.GetItem(j)
+				lip := itm.(*ListItemPrimitive)
+
+				// TODO: should be a database lookup
+				pocket.DetailView.Display(ListItem{
+					id:   lip.id,
+					name: lip.name,
+					desc: lip.desc,
+				})
+				pocket.Pages.SwitchToPage(PageDetail)
+			}
 			return nil
 		}
 
@@ -381,4 +429,17 @@ func NewListInfoView(app *tview.Application) (iv *ListInfoView) {
 	iv.flex = mainFlex
 
 	return iv
+}
+
+func FindFocus(f *tview.Flex) (int, bool) {
+	var i int = -1
+	l := f.GetItemCount()
+	for j := 0; j < l; j++ {
+		it := f.GetItem(j)
+		if it.HasFocus() {
+			i = j
+			break
+		}
+	}
+	return i, i > -1
 }
