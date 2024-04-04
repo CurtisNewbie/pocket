@@ -16,21 +16,24 @@ const (
 )
 
 var (
-	app                *tview.Application
-	page               int    = 0
-	resetListPageFocus func() = func() {}
+	app  *tview.Application
+	page int = 0
 )
 
 type Pocket struct {
-	App          *tview.Application
-	Pages        *tview.Pages
-	ListInfoView *ListView
-	DetailView   *DetailView
+	App           *tview.Application
+	Pages         *tview.Pages
+	ListInfoView  *ListView
+	DetailOptions *tview.List
+	DetailView    *DetailView
+}
+
+func (p *Pocket) ToPage(page string) {
+	p.Pages.SwitchToPage(page)
 }
 
 func NewListPage(pocket *Pocket) tview.Primitive {
 	liv := NewListView(pocket)
-	pocket.ListInfoView = liv
 	options := NewOptionList().
 		AddItem("Search", "", '/', func() {
 			EditSearchPage(liv, pocket.Pages)
@@ -49,7 +52,9 @@ func NewListPage(pocket *Pocket) tview.Primitive {
 			}
 		}).
 		AddItem("Exit", "", 'q', func() { app.Stop() })
-	resetListPageFocus = func() { app.SetFocus(options) }
+
+	pocket.ListInfoView = liv
+	pocket.DetailOptions = options
 
 	p := NewContentPlane(options, liv.flex)
 
@@ -299,15 +304,14 @@ type ListItem struct {
 
 type ListItemPrimitive struct {
 	*tview.Table
-	id   int
-	name string
-	desc string
+	ListItem
 }
 
 func (l *ListView) AddItem(itm ListItem) {
 	tb := tview.NewTable()
 	lip := new(ListItemPrimitive)
 	lip.Table = tb
+	lip.ListItem = itm
 	tb.SetBorder(true)
 
 	tb.SetCellSimple(0, 0, "Id:")
@@ -367,7 +371,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
 		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' {
-			resetListPageFocus()
+			pocket.App.SetFocus(pocket.DetailOptions)
 			return nil
 		}
 
