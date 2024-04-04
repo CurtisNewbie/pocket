@@ -126,7 +126,7 @@ func EditSearchPage(liv *ListView, pages *tview.Pages) {
 
 	form := tview.NewForm()
 	var tmpName string = liv.name.Text
-	form.AddInputField("Name:", liv.name.Text, 30, nil, func(t string) { tmpName = t })
+	form.AddInputField("Name:", "", 30, nil, func(t string) { tmpName = t })
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Search Parameters ")
@@ -139,7 +139,7 @@ func EditSearchPage(liv *ListView, pages *tview.Pages) {
 		return evt
 	})
 
-	popup := createPopup(pages, form, 20, 60)
+	popup := createPopup(pages, form, 5, 100)
 	pages.AddPage(PageSearch, popup, true, true)
 }
 
