@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -12,6 +13,8 @@ const (
 	PageList   = "list"
 	PageDetail = "detail"
 	PageSearch = "search"
+	PageCreate = "create"
+	PageEdit   = "edit"
 )
 
 // TODO: merges the view and options together as single value
@@ -24,6 +27,10 @@ type Pocket struct {
 
 func (p *Pocket) ToPage(page string) {
 	p.Pages.SwitchToPage(page)
+}
+
+func (p *Pocket) RemovePage(page string) {
+	p.Pages.RemovePage(page)
 }
 
 func (p *Pocket) QueueCommand(f func()) {
@@ -58,6 +65,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 	lv := NewListView(pocket)
 	opt := NewOptionList().
 		AddItem("Create Item", "", 'c', func() {
+			CreateNotePage(pocket)
 		}).
 		AddItem("Search Param", "", '/', func() {
 			EditSearchPage(lv, pocket.Pages)
@@ -135,6 +143,91 @@ func EditSearchPage(liv *ListView, pages *tview.Pages) {
 	pages.AddPage(PageSearch, popup, true, true)
 }
 
+func EditNotePage(pocket *Pocket, it ListItem) {
+	closePopup := func() {
+		pocket.ToPage(PageDetail)
+		pocket.DetailPage.View.Display(it)
+		pocket.RemovePage(PageCreate)
+	}
+
+	form := tview.NewForm()
+	var tmpName string = it.name
+	var tmpDesc string = it.desc
+	var tmpContent string = it.content
+
+	form.AddInputField("Name:", tmpName, 30, nil, func(t string) { tmpName = t })
+	form.AddTextArea("Description:", tmpDesc, 300, 20, 500, func(t string) { tmpDesc = t })
+	form.AddTextArea("Content:", tmpContent, 300, 20, 500, func(t string) { tmpContent = t })
+
+	confirm := func() {
+		pocket.DetailPage.View.Display(ListItem{
+			name:    tmpName,
+			desc:    tmpDesc,
+			content: tmpContent,
+			ctime:   it.ctime,
+			utime:   time.Now(),
+		})
+		pocket.RemovePage(PageEdit)
+	}
+	form.AddButton("Confirm", confirm)
+	form.SetCancelFunc(closePopup)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetBorder(true).SetTitle(" Edit Note ")
+	form.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
+		if evt.Key() == tcell.KeyEnter {
+			confirm()
+			return nil
+		}
+		return evt
+	})
+
+	popup := createPopup(pocket.Pages, form, 50, 100)
+	pocket.Pages.AddPage(PageEdit, popup, true, true)
+}
+
+func CreateNotePage(pocket *Pocket) {
+	closePopup := func() {
+		pocket.ToPage(PageList)
+		pocket.RemovePage(PageCreate)
+	}
+
+	form := tview.NewForm()
+	var tmpName string = ""
+	var tmpDesc string = ""
+	var tmpContent string = ""
+
+	form.AddInputField("Name:", "", 30, nil, func(t string) { tmpName = t })
+	form.AddTextArea("Description:", "", 300, 20, 500, func(t string) { tmpDesc = t })
+	form.AddTextArea("Content:", "", 300, 20, 500, func(t string) { tmpContent = t })
+
+	confirm := func() {
+		pocket.ToPage(PageDetail)
+		ctime := time.Now()
+		pocket.DetailPage.View.Display(ListItem{
+			name:    tmpName,
+			desc:    tmpDesc,
+			content: tmpContent,
+			ctime:   ctime,
+			utime:   ctime,
+		})
+		pocket.RemovePage(PageCreate)
+	}
+	form.AddButton("Confirm", confirm)
+	form.SetCancelFunc(closePopup)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetBorder(true).SetTitle(" Create Bootmark ")
+	form.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
+		if evt.Key() == tcell.KeyEnter {
+			confirm()
+			return nil
+		}
+		return evt
+	})
+
+	popup := createPopup(pocket.Pages, form, 50, 100)
+	pocket.Pages.AddPage(PageCreate, popup, true, true)
+}
+
 func createPopup(pages *tview.Pages, form tview.Primitive, height int, width int) tview.Primitive {
 	modal := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(nil, 0, 1, false).
@@ -157,6 +250,7 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 	vw := NewDetailView(pocket)
 	options := NewOptionList().
 		AddItem("Edit", "", 'e', func() {
+			EditNotePage(pocket, vw.Item)
 		}).
 		AddItem("Mask", "", 'm', func() {
 		}).
@@ -244,11 +338,17 @@ type DetailView struct {
 	utime   *tview.TableCell
 	desc    *tview.TableCell
 	content *tview.TextView
+
+	Item ListItem
 }
 
 func (d *DetailView) Display(li ListItem) {
 	d.name.SetText(li.name)
 	d.desc.SetText(li.desc)
+	d.content.SetText(li.content)
+	d.ctime.SetText(FormatTime(li.ctime))
+	d.utime.SetText(FormatTime(li.utime))
+	d.Item = li
 }
 
 func NewDetailView(pocket *Pocket) (iv *DetailView) {
@@ -313,9 +413,12 @@ type ListView struct {
 }
 
 type ListItem struct {
-	id   int
-	name string
-	desc string
+	id      int
+	name    string
+	desc    string
+	content string
+	ctime   time.Time
+	utime   time.Time
 }
 
 type ListItemPrimitive struct {
@@ -395,9 +498,10 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 
 				// TODO: should be a database lookup
 				pocket.DetailPage.View.Display(ListItem{
-					id:   lip.id,
-					name: lip.name,
-					desc: lip.desc,
+					id:      lip.id,
+					name:    lip.name,
+					desc:    lip.desc,
+					content: lip.content,
 				})
 				pocket.Pages.SwitchToPage(PageDetail)
 			}
@@ -447,4 +551,8 @@ func FindFocus(f *tview.Flex) (int, bool) {
 		}
 	}
 	return i, i > -1
+}
+
+func FormatTime(t time.Time) string {
+	return t.Format("2006/01/02 15:04:05")
 }
