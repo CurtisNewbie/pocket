@@ -15,20 +15,25 @@ const (
 	PageSearch = "search"
 )
 
-var (
-	app *tview.Application
-)
-
 type Pocket struct {
 	App           *tview.Application
 	Pages         *tview.Pages
-	ListInfoView  *ListView
-	DetailOptions *tview.List
+	ListView      *ListView
+	ListOptions   *tview.List
 	DetailView    *DetailView
+	DetailOptions *tview.List
 }
 
 func (p *Pocket) ToPage(page string) {
 	p.Pages.SwitchToPage(page)
+}
+
+func (p *Pocket) QueueCommand(f func()) {
+	p.App.QueueUpdateDraw(f)
+}
+
+func (p *Pocket) Stop() {
+	p.App.Stop()
 }
 
 func NewListPage(pocket *Pocket) tview.Primitive {
@@ -40,28 +45,27 @@ func NewListPage(pocket *Pocket) tview.Primitive {
 			EditSearchPage(liv, pocket.Pages)
 		}).
 		AddItem("Select", "", 's', func() {
-			app.SetFocus(liv.content)
+			pocket.App.SetFocus(liv.content)
 		}).
 		AddItem("Next", "", 'n', func() {
-			pocket.ListInfoView.pageNum += 1
-			liv.page.SetText(cast.ToString(pocket.ListInfoView.pageNum))
+			pocket.ListView.pageNum += 1
+			liv.page.SetText(cast.ToString(pocket.ListView.pageNum))
 		}).
 		AddItem("Prev", "", 'N', func() {
-			if pocket.ListInfoView.pageNum > 1 {
-				pocket.ListInfoView.pageNum -= 1
-				liv.page.SetText(cast.ToString(pocket.ListInfoView.pageNum))
+			if pocket.ListView.pageNum > 1 {
+				pocket.ListView.pageNum -= 1
+				liv.page.SetText(cast.ToString(pocket.ListView.pageNum))
 			}
 		}).
-		AddItem("Exit", "", 'q', func() { app.Stop() })
+		AddItem("Exit", "", 'q', func() { pocket.Stop() })
 
-	pocket.ListInfoView = liv
-	pocket.DetailOptions = options
+	pocket.ListView = liv
+	pocket.ListOptions = options
 
 	p := NewContentPlane(options, liv.flex)
 
 	// TODO: demo
 	go func() {
-		liv.bar.SetText(`List View`)
 		liv.name.SetText(`Goody`)
 		liv.AddItem(ListItem{
 			id:   1,
@@ -78,7 +82,7 @@ func NewListPage(pocket *Pocket) tview.Primitive {
 			name: "yo",
 			desc: "yo it's me",
 		})
-		liv.desc.SetText(`Very good stuff`)
+		// liv.desc.SetText(`Very good stuff`)
 	}()
 	return p
 }
@@ -91,17 +95,19 @@ func EditSearchPage(liv *ListView, pages *tview.Pages) {
 
 	form := tview.NewForm()
 	var tmpName string = liv.name.Text
-	var tmpDesc string = liv.desc.Text
 	form.AddInputField("Name:", liv.name.Text, 30, nil, func(t string) { tmpName = t })
-	form.AddInputField("Description:", liv.desc.Text, 30, nil, func(t string) { tmpDesc = t })
-	form.AddButton("Confirm", func() {
-		liv.name.SetText(tmpName)
-		liv.desc.SetText(tmpDesc)
-		closePopup()
-	})
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Search Parameters ")
+	form.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
+		if evt.Key() == tcell.KeyEnter {
+			liv.name.SetText(tmpName)
+			closePopup()
+			return nil
+		}
+		return evt
+	})
+
 	popup := createPopup(pages, form, 20, 60)
 	pages.AddPage(PageSearch, popup, true, true)
 }
@@ -118,8 +124,7 @@ func createPopup(pages *tview.Pages, form tview.Primitive, height int, width int
 }
 
 func NewDetailPage(pocket *Pocket) tview.Primitive {
-	vw := NewDetailView(app)
-	pocket.DetailView = vw
+	vw := NewDetailView(pocket)
 	options := NewOptionList().
 		AddItem("Edit", "", 'e', func() {
 		}).
@@ -127,18 +132,17 @@ func NewDetailPage(pocket *Pocket) tview.Primitive {
 		}).
 		AddItem("Mask", "", 'm', func() {
 		}).
-		AddItem("To List Page", "", 'l', func() {
-			pocket.Pages.SwitchToPage(PageList)
-		}).
 		AddItem("Exit", "", 'q', func() {
-			app.Stop()
+			pocket.Pages.SwitchToPage(PageList)
 		})
 
+	pocket.DetailView = vw
+	pocket.DetailOptions = options
 	p := NewContentPlane(options, vw.flex)
 
 	// TODO: demo
 	go func() {
-		QueueCommand(func() {
+		pocket.QueueCommand(func() {
 			vw.bar.SetText(`Hello World!!!!`)
 			vw.name.SetText(`Goody`)
 			vw.content.SetText(`Very good stuff Very good stuff Very good stuff Very good stuff`)
@@ -151,7 +155,7 @@ func NewDetailPage(pocket *Pocket) tview.Primitive {
 }
 
 func NewApp() *tview.Application {
-	app = tview.NewApplication()
+	app := tview.NewApplication()
 	pages := tview.NewPages()
 	pocket := &Pocket{
 		App:   app,
@@ -209,7 +213,6 @@ func NewOptionList() *tview.List {
 }
 
 type DetailView struct {
-	app  *tview.Application
 	flex *tview.Flex
 
 	bar     *tview.TextView
@@ -225,16 +228,10 @@ func (d *DetailView) Display(li ListItem) {
 	d.desc.SetText(li.desc)
 }
 
-func QueueCommand(f func()) {
-	app.QueueUpdateDraw(f)
-}
-
-func NewDetailView(app *tview.Application) (iv *DetailView) {
+func NewDetailView(pocket *Pocket) (iv *DetailView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
-	iv = &DetailView{}
-	iv.app = app
-
+	iv = new(DetailView)
 	iv.bar = tview.NewTextView()
 	iv.bar.SetBorder(true)
 	iv.bar.SetText(" ")
@@ -242,7 +239,7 @@ func NewDetailView(app *tview.Application) (iv *DetailView) {
 	topFlex.AddItem(iv.bar, 3, 1, false)
 
 	tb := tview.NewTable()
-	tb.SetBorder(true).SetTitle(" Searching Parameters ")
+	tb.SetBorder(true).SetTitle(" Info ")
 
 	tb.SetCellSimple(0, 1, "Name:")
 	tb.GetCell(0, 1).SetAlign(tview.AlignRight)
@@ -271,7 +268,7 @@ func NewDetailView(app *tview.Application) (iv *DetailView) {
 
 	iv.content = tview.NewTextView()
 	iv.content.SetBorder(true).SetTitle(" Content ")
-	iv.content.SetChangedFunc(func() { app.Draw() })
+	iv.content.SetChangedFunc(func() { pocket.App.Draw() })
 
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(topFlex, 10, 1, true).
@@ -283,12 +280,9 @@ func NewDetailView(app *tview.Application) (iv *DetailView) {
 }
 
 type ListView struct {
-	app  *tview.Application
-	flex *tview.Flex
-
+	flex    *tview.Flex
 	bar     *tview.TextView
 	name    *tview.TableCell
-	desc    *tview.TableCell
 	page    *tview.TableCell
 	content *tview.Flex
 
@@ -333,37 +327,31 @@ func (l *ListView) AddItem(itm ListItem) {
 func NewListView(pocket *Pocket) (iv *ListView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
-	iv = &ListView{}
-	iv.app = app
-
+	iv = new(ListView)
 	iv.bar = tview.NewTextView()
+	iv.bar.SetText(`List View`)
 	iv.bar.SetBorder(true)
-	iv.bar.SetText(" ")
 	iv.bar.SetTextAlign(tview.AlignCenter)
 	topFlex.AddItem(iv.bar, 3, 1, false)
 
 	tb := tview.NewTable()
-	tb.SetBorder(true).SetTitle(" Info ")
+	tb.SetBorder(true).SetTitle(" Searching Parameters ")
 
 	tb.SetCellSimple(0, 1, "Name:")
 	tb.GetCell(0, 1).SetAlign(tview.AlignRight)
 	iv.name = tview.NewTableCell("")
 	tb.SetCell(0, 2, iv.name)
 
-	tb.SetCellSimple(1, 1, "Description:")
+	tb.SetCellSimple(1, 1, "Page:")
 	tb.GetCell(1, 1).SetAlign(tview.AlignRight)
-	iv.desc = tview.NewTableCell("")
-	tb.SetCell(1, 2, iv.desc)
-
-	tb.SetCellSimple(2, 1, "Page:")
-	tb.GetCell(2, 1).SetAlign(tview.AlignRight)
 	iv.page = tview.NewTableCell("1")
-	tb.SetCell(2, 2, iv.page)
+	tb.SetCell(1, 2, iv.page)
 
-	infp := tview.NewFlex().SetDirection(tview.FlexColumn).
+	infp := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
 		AddItem(tb, 0, 1, false)
 
-	topFlex.AddItem(infp, 0, 1, false)
+	topFlex.AddItem(infp, 0, 2, false)
 
 	iv.content = tview.NewFlex().SetDirection(tview.FlexRow)
 	iv.content.SetBorder(true).SetTitle(" Records ")
@@ -407,19 +395,19 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 				switch r {
 				case 'j':
 					if i < l-1 {
-						app.SetFocus(iv.content.GetItem(i + 1))
+						pocket.App.SetFocus(iv.content.GetItem(i + 1))
 					} else {
-						app.SetFocus(iv.content.GetItem(0))
+						pocket.App.SetFocus(iv.content.GetItem(0))
 					}
 				case 'k':
 					if i > 0 {
-						app.SetFocus(iv.content.GetItem(i - 1))
+						pocket.App.SetFocus(iv.content.GetItem(i - 1))
 					} else {
-						app.SetFocus(iv.content.GetItem(l - 1))
+						pocket.App.SetFocus(iv.content.GetItem(l - 1))
 					}
 				}
 			} else if l > 0 {
-				app.SetFocus(iv.content.GetItem(0))
+				pocket.App.SetFocus(iv.content.GetItem(0))
 			}
 		}
 		return evt
