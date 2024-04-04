@@ -128,9 +128,9 @@ func NewDetailPage(pocket *Pocket) tview.Primitive {
 	options := NewOptionList().
 		AddItem("Edit", "", 'e', func() {
 		}).
-		AddItem("Unmask", "", 'u', func() {
-		}).
 		AddItem("Mask", "", 'm', func() {
+		}).
+		AddItem("Unmask", "", 'u', func() {
 		}).
 		AddItem("Exit", "", 'q', func() {
 			pocket.Pages.SwitchToPage(PageList)
@@ -321,6 +321,8 @@ func (l *ListView) AddItem(itm ListItem) {
 	tb.GetCell(2, 0).SetAlign(tview.AlignRight)
 	descc := tview.NewTableCell(itm.desc)
 	tb.SetCell(2, 1, descc)
+	lip.SetFocusFunc(func() { lip.SetBorderColor(tcell.ColorYellow) })
+	lip.SetBlurFunc(func() { lip.SetBorderColor(tcell.ColorWhite) })
 	l.content.AddItem(lip, 5, 1, false)
 }
 
@@ -382,16 +384,9 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 		r := evt.Rune()
 		switch r {
 		case 'j', 'k':
-			var i int = -1
 			l := iv.content.GetItemCount()
-			for j := 0; j < l; j++ {
-				it := iv.content.GetItem(j)
-				if it.HasFocus() {
-					i = j
-					break
-				}
-			}
-			if i > -1 {
+			i, ok := FindFocus(iv.content)
+			if ok {
 				switch r {
 				case 'j':
 					if i < l-1 {
