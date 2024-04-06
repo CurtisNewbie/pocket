@@ -55,6 +55,10 @@ func (l *ListPage) GetPage() int {
 	return l.View.pageNum
 }
 
+func (l *ListPage) GetPageStr() string {
+	return cast.ToString(l.View.pageNum)
+}
+
 func (l *ListPage) AddPage(delta int) int {
 	l.View.pageNum += delta
 	return l.View.pageNum
@@ -65,10 +69,10 @@ func NewListPage(pocket *Pocket) *ListPage {
 	lv := NewListView(pocket)
 	opt := NewOptionList().
 		AddItem("Create Item", "", 'c', func() {
-			CreateNotePage(pocket)
+			PopCreateNotePage(pocket)
 		}).
 		AddItem("Search Param", "", '/', func() {
-			EditSearchPage(lv, pocket.Pages)
+			PopEditSearchPage(lv, pocket.Pages)
 		}).
 		AddItem("Select Item", "", 's', func() {
 			c := lv.content.GetItemCount()
@@ -80,7 +84,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 		}).
 		AddItem("Next Page", "", 'n', func() {
 			pocket.ListPage.AddPage(1)
-			lv.page.SetText(cast.ToString(pocket.ListPage.View))
+			lv.page.SetText(pocket.ListPage.GetPageStr())
 		}).
 		AddItem("Prev Page", "", 'N', func() {
 			if pocket.ListPage.GetPage() > 1 {
@@ -118,15 +122,16 @@ func NewListPage(pocket *Pocket) *ListPage {
 	return lp
 }
 
-func EditSearchPage(liv *ListView, pages *tview.Pages) {
+func PopEditSearchPage(liv *ListView, pages *tview.Pages) {
 	closePopup := func() {
 		pages.SwitchToPage(PageList)
 		pages.RemovePage(PageSearch)
 	}
 
-	form := tview.NewForm()
-	var tmpName string = liv.name.Text
-	form.AddInputField("Name:", "", 30, nil, func(t string) { tmpName = t })
+	var tmpName string = ""
+
+	form := NewForm()
+	form.AddInputField("Name:", tmpName, 60, nil, func(t string) { tmpName = t })
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Search Parameters ")
@@ -139,25 +144,25 @@ func EditSearchPage(liv *ListView, pages *tview.Pages) {
 		return evt
 	})
 
-	popup := createPopup(pages, form, 5, 100)
+	popup := createPopup(pages, form, 5, 70)
 	pages.AddPage(PageSearch, popup, true, true)
 }
 
-func EditNotePage(pocket *Pocket, it ListItem) {
+func PopEditNotePage(pocket *Pocket, it ListItem) {
 	closePopup := func() {
 		pocket.ToPage(PageDetail)
 		pocket.DetailPage.View.Display(it)
 		pocket.RemovePage(PageCreate)
 	}
 
-	form := tview.NewForm()
+	form := NewForm()
 	var tmpName string = it.name
 	var tmpDesc string = it.desc
 	var tmpContent string = it.content
 
 	form.AddInputField("Name:", tmpName, 30, nil, func(t string) { tmpName = t })
-	form.AddTextArea("Description:", tmpDesc, 300, 20, 500, func(t string) { tmpDesc = t })
-	form.AddTextArea("Content:", tmpContent, 300, 20, 500, func(t string) { tmpContent = t })
+	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) { tmpDesc = t })
+	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) { tmpContent = t })
 
 	confirm := func() {
 		pocket.DetailPage.View.Display(ListItem{
@@ -173,32 +178,25 @@ func EditNotePage(pocket *Pocket, it ListItem) {
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Edit Note ")
-	form.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
-		if evt.Key() == tcell.KeyEnter {
-			confirm()
-			return nil
-		}
-		return evt
-	})
 
-	popup := createPopup(pocket.Pages, form, 50, 100)
+	popup := createPopup(pocket.Pages, form, 35, 100)
 	pocket.Pages.AddPage(PageEdit, popup, true, true)
 }
 
-func CreateNotePage(pocket *Pocket) {
+func PopCreateNotePage(pocket *Pocket) {
 	closePopup := func() {
 		pocket.ToPage(PageList)
 		pocket.RemovePage(PageCreate)
 	}
 
-	form := tview.NewForm()
+	form := NewForm()
 	var tmpName string = ""
 	var tmpDesc string = ""
 	var tmpContent string = ""
 
-	form.AddInputField("Name:", "", 30, nil, func(t string) { tmpName = t })
-	form.AddTextArea("Description:", "", 300, 20, 500, func(t string) { tmpDesc = t })
-	form.AddTextArea("Content:", "", 300, 20, 500, func(t string) { tmpContent = t })
+	form.AddInputField("Name:", tmpName, 30, nil, func(t string) { tmpName = t })
+	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) { tmpDesc = t })
+	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) { tmpContent = t })
 
 	confirm := func() {
 		pocket.ToPage(PageDetail)
@@ -216,15 +214,8 @@ func CreateNotePage(pocket *Pocket) {
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Create Bootmark ")
-	form.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
-		if evt.Key() == tcell.KeyEnter {
-			confirm()
-			return nil
-		}
-		return evt
-	})
 
-	popup := createPopup(pocket.Pages, form, 50, 100)
+	popup := createPopup(pocket.Pages, form, 35, 100)
 	pocket.Pages.AddPage(PageCreate, popup, true, true)
 }
 
@@ -250,11 +241,11 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 	vw := NewDetailView(pocket)
 	options := NewOptionList().
 		AddItem("Edit", "", 'e', func() {
-			EditNotePage(pocket, vw.Item)
+			PopEditNotePage(pocket, vw.Item)
 		}).
 		AddItem("Mask", "", 'm', func() {
 		}).
-		AddItem("Unmask", "", 'u', func() {
+		AddItem("Unmask", "", 'M', func() {
 		}).
 		AddItem("Exit", "", 'q', func() {
 			pocket.Pages.SwitchToPage(PageList)
@@ -555,4 +546,39 @@ func FindFocus(f *tview.Flex) (int, bool) {
 
 func FormatTime(t time.Time) string {
 	return t.Format("2006/01/02 15:04:05")
+}
+
+// Form with grey background color, and only uses Shift+Tab to move cursor between inputs/buttons to support typing \t in textarea.
+func NewForm() *tview.Form {
+	form := tview.NewForm()
+	form.SetFieldBackgroundColor(tcell.ColorDarkSlateGrey)
+	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+
+		DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
+
+		if ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModNone { // only TAB, append at the end \t
+			ta, _, ok := FindFocusedTextArea(form)
+			if ok {
+				ta.SetText(ta.GetText()+"\t", true)
+				return nil
+			}
+		}
+
+		if (ev.Key() == tcell.KeyBacktab) || (ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModNone) { // Shift+Tab, switch to next input
+			return tcell.NewEventKey(tcell.KeyTAB, 0, tcell.ModNone)
+		}
+
+		return ev
+	})
+	return form
+}
+
+func FindFocusedTextArea(form *tview.Form) (*tview.TextArea, int, bool) {
+	i, _ := form.GetFocusedItemIndex()
+	if i > -1 {
+		if v, ok := form.GetFormItem(i).(*tview.TextArea); ok {
+			return v, i, true
+		}
+	}
+	return nil, 0, false
 }
