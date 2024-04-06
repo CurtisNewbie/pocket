@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -14,29 +15,30 @@ import (
 )
 
 const (
-	PageList   = "list"
-	PageDetail = "detail"
-	PageSearch = "search"
-	PageCreate = "create"
-	PageEdit   = "edit"
-	PageDelete = "delete"
+	PagePassword = "delete"
+	PageList     = "list"
+	PageDetail   = "detail"
+	PageSearch   = "search"
+	PageCreate   = "create"
+	PageEdit     = "edit"
+	PageDelete   = "delete"
 )
 
 var (
 	StDeleteNote func(it NoteItem) error = func(it NoteItem) error {
-		DebugLog("Delete note %#v", it)
+		Debugf("Delete note %#v", it)
 		return nil
 	}
 	StEditNote func(note NoteItem) error = func(note NoteItem) error {
-		DebugLog("Edit note %#v", note)
+		Debugf("Edit note %#v", note)
 		return nil
 	}
 	StCreateNote func(note NoteItem) error = func(note NoteItem) error {
-		DebugLog("Create note %#v", note)
+		Debugf("Create note %#v", note)
 		return nil
 	}
 	StFetchNotes func(page int, name string) ([]NoteItem, error) = func(page int, name string) ([]NoteItem, error) {
-		DebugLog("Fetch page, %v, name: %v", page, name)
+		Debugf("Fetch page, %v, name: %v", page, name)
 		return []NoteItem{
 			{
 				id:   rand.Intn(10),
@@ -71,6 +73,10 @@ type Pocket struct {
 	Pages      *tview.Pages
 	DetailPage *DetailPage
 	ListPage   *ListPage
+}
+
+func (p *Pocket) Run() error {
+	return p.App.Run()
 }
 
 func (p *Pocket) ToPage(page string) {
@@ -316,7 +322,7 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 	return dp
 }
 
-func NewApp() *tview.Application {
+func NewApp() *Pocket {
 	app := tview.NewApplication()
 	pages := tview.NewPages()
 	pocket := &Pocket{
@@ -332,13 +338,16 @@ func NewApp() *tview.Application {
 
 	pages.AddPage(PageDetail, detailPage, true, true)
 	pages.AddPage(PageList, listPage, true, true)
-	pages.SwitchToPage(PageList)
-	app.SetRoot(pages, true) // TODO: page to validate username/password
 
-	// fetch the first page
-	UIFetchNotes(pocket, 1, "")
+	// page to add password
+	PopPasswordPage(pocket, func() {
+		// fetch the first page
+		UIFetchNotes(pocket, 1, "")
+	})
 
-	return app
+	app.SetRoot(pages, true)
+
+	return pocket
 }
 
 func NewContentPlane(options tview.Primitive, content tview.Primitive) *tview.Flex {
@@ -689,4 +698,28 @@ func UIFetchNotes(pocket *Pocket, page int, name string) {
 			})
 		}
 	}()
+}
+
+func PopPasswordPage(pocket *Pocket, onConfirm func()) {
+	form := NewForm()
+
+	// TODO: Validate input
+	var tmppw string = ""
+	form.AddInputField("Password (8-32 english characters):", tmppw, 32, nil,
+		func(t string) {
+			tmppw = t
+		})
+
+	form.AddButton("Confirm", func() {
+		password = []byte(strings.TrimSpace(tmppw))
+		pocket.RemovePage(PagePassword)
+		pocket.ToPage(PageList)
+		onConfirm()
+	})
+	form.SetCancelFunc(pocket.Stop)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetBorder(true).SetTitle(" Enter Password ")
+
+	popup := createPopup(pocket.Pages, form, 35, 100)
+	pocket.Pages.AddPage(PagePassword, popup, true, true)
 }

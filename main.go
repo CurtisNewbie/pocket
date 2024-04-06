@@ -4,10 +4,12 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strings"
 )
 
 var (
-	debug = flag.Bool("debug", false, "enable debug log")
+	debug    = flag.Bool("debug", false, "enable debug log")
+	database = flag.String("db", "", "sqlite database file, default to $HOME/pocket")
 )
 
 var (
@@ -32,12 +34,39 @@ func main() {
 		}()
 	}
 
+	if *database == "" {
+		if v, ok := os.LookupEnv(EnvSqliteFile); ok {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				*database = v
+			}
+		}
+	}
+
+	if *database == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		sp := string(os.PathSeparator)
+		pdir := home + sp + "pocket"
+		err = os.MkdirAll(pdir, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+		*database = pdir + sp + "pocket.db"
+	}
+
+	if err := OpenDB(*database); err != nil {
+		panic(err)
+	}
+
 	if err := NewApp().Run(); err != nil {
 		panic(err)
 	}
 }
 
-func DebugLog(fmt string, args ...any) {
+func Debugf(fmt string, args ...any) {
 	if _debugLogPipe == nil {
 		return
 	}
