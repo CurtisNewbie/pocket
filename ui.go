@@ -4,6 +4,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -72,6 +73,12 @@ func NewListPage(pocket *Pocket) *ListPage {
 		UIFetchNotes(pocket, p, lv.name.Text)
 	}
 	opt := NewOptionList().
+		AddItem("Search Param", "", '/', func() {
+			PopEditSearchPage(pocket)
+		}).
+		AddItem("Create Item", "", 'c', func() {
+			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
+		}).
 		AddItem("Select Item", "", 'l', func() {
 			c := lv.content.GetItemCount()
 			if c < 1 {
@@ -79,12 +86,6 @@ func NewListPage(pocket *Pocket) *ListPage {
 			} else {
 				pocket.SetFocus(lv.content.GetItem(0))
 			}
-		}).
-		AddItem("Create Item", "", 'c', func() {
-			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
-		}).
-		AddItem("Search Param", "", '/', func() {
-			PopEditSearchPage(pocket)
 		}).
 		AddItem("Next Page", "", 'n', func() {
 			lv.page.SetText(pocket.ListPage.GetPageStr())
@@ -249,10 +250,8 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 		AddItem("Delete", "", 'D', func() {
 			PopDeleteNotePage(pocket, vw.Item)
 		}).
-		AddItem("Mask", "", 'm', func() {
-		}).
-		AddItem("Unmask", "", 'M', func() {
-		}).
+		AddItem("Mask", "", 'm', vw.MaskNote).
+		AddItem("Unmask", "", 'M', vw.UnmaskNote).
 		AddItem("Exit", "", 'q', func() {
 			pocket.Pages.SwitchToPage(PageList)
 		})
@@ -341,6 +340,15 @@ type DetailView struct {
 	Item Note
 }
 
+func (d *DetailView) MaskNote() {
+	s := strings.Repeat("*", len([]rune(d.Item.Content)))
+	d.content.SetText(s)
+}
+
+func (d *DetailView) UnmaskNote() {
+	d.content.SetText(d.Item.Content)
+}
+
 func (d *DetailView) Display(nt Note) {
 	Debugf("Display %#v", nt)
 	d.id.SetText(cast.ToString(nt.Id))
@@ -350,6 +358,8 @@ func (d *DetailView) Display(nt Note) {
 	d.ctime.SetText(nt.Ctime.FormatClassic())
 	d.utime.SetText(nt.Utime.FormatClassic())
 	d.Item = nt
+
+	d.MaskNote()
 }
 
 func NewDetailView(pocket *Pocket) (iv *DetailView) {
@@ -500,6 +510,12 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
 		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' || evt.Rune() == 'h' {
 			pocket.SetFocus(pocket.ListPage.Options)
+			return nil
+		}
+
+		if evt.Rune() == 'G' || (evt.Rune() == 'g' && evt.Modifiers() == tcell.ModShift) {
+			n := iv.content.GetItemCount()
+			pocket.SetFocus(iv.content.GetItem(n - 1))
 			return nil
 		}
 
