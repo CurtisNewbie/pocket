@@ -27,6 +27,11 @@ func InitPassword(tmppw string) {
 	}
 }
 
+func Encrypt0(s string) string {
+	v, _ := Encrypt(s)
+	return v
+}
+
 func Encrypt(s string) (string, error) {
 	aesCipher, err := aes.NewCipher(_password)
 	if err != nil {
@@ -45,6 +50,11 @@ func Encrypt(s string) (string, error) {
 
 	encrypted := gcm.Seal(nonce, nonce, []byte(s), nil)
 	return hex.EncodeToString(encrypted), nil
+}
+
+func Decrypt0(s string) string {
+	v, _ := Decrypt(s)
+	return v
 }
 
 func Decrypt(s string) (string, error) {

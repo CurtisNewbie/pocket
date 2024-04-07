@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 )
 
 const (
@@ -12,65 +11,25 @@ const (
 
 // Storage API Contract
 var (
-	StDeleteNote    func(it NoteItem) error
-	StEditNote      func(note NoteItem) error
-	StCreateNote    func(note NoteItem) error
-	StFetchNotes    func(page int, name string) ([]NoteItem, error)
-	StCheckPassword func(pw string) (bool, error) = CheckPassword
-	StInitSchema    func() error                  = InitSchema
+	StDeleteNote    func(note Note) error                                  = DeleteNote
+	StEditNote      func(note Note) error                                  = UpdateNote
+	StCreateNote    func(note Note) (Note, error)                          = CreateNote
+	StFetchNotes    func(page int, limit int, name string) ([]Note, error) = FetchNotes
+	StCheckPassword func(pw string) (bool, error)                          = CheckPassword
+	StInitSchema    func() error                                           = InitSchema
 )
 
 var (
 	_initSchemaFlag = false
 )
 
-func init() {
-	// TODO: for demo only
-	StDeleteNote = func(it NoteItem) error {
-		Debugf("Delete note %#v", it)
-		return nil
-	}
-	StEditNote = func(note NoteItem) error {
-		Debugf("Edit note %#v", note)
-		return nil
-	}
-	StCreateNote = func(note NoteItem) error {
-		Debugf("Create note %#v", note)
-		return nil
-	}
-	StFetchNotes = func(page int, name string) ([]NoteItem, error) {
-		Debugf("Fetch page, %v, name: %v", page, name)
-		return []NoteItem{
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			}, {
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-		}, nil
-	}
-	// StCheckPassword = func(pw string) bool {
-	// 	Debugf("Checking passward")
-	// 	return true
-	// }
+type Note struct {
+	Id      int
+	Name    string
+	Desc    string
+	Content string
+	Ctime   ETime
+	Utime   ETime
 }
 
 func CheckPassword(pw string) (bool, error) {
@@ -133,17 +92,94 @@ func InitSchema() error {
 
 	err = GetDB().Exec(`
 		CREATE VIRTUAL TABLE IF NOT EXISTS pocket_note USING fts4 (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			desc TEXT NOT NULL,
 			content TEXT NOT NULL,
-			ctime DATE NOT NULL,
-			utime DATE NOT NULL
+			ctime DATETIME NOT NULL,
+			utime DATETIME NOT NULL
 		)
 	`).Error
 	if err != nil {
 		return fmt.Errorf("failed to initialize schema, %v", err)
 	}
 
+	return nil
+}
+
+func FetchNotes(page int, limit int, name string) ([]Note, error) {
+	t := GetDB().Table("pocket_note").
+		Select("rowid id, name, desc, content, ctime, utime").
+		Order("id DESC").
+		Limit(limit).
+		Offset((page - 1) * limit)
+
+	if name != "" {
+		t = t.Where("name MATCH ?", name)
+	}
+
+	var notes []Note
+	if err := t.Scan(&notes).Error; err != nil {
+		return nil, fmt.Errorf("failed to query notes, %v", err)
+	}
+	if notes == nil {
+		notes = make([]Note, 0)
+	}
+	Debugf("fetched notes: %#v", notes)
+	for i := range notes {
+		notes[i] = DecryptNote(notes[i])
+	}
+	return notes, nil
+}
+
+func CreateNote(n Note) (Note, error) {
+	n = EncryptNote(n)
+
+	err := GetDB().Exec(`
+	INSERT INTO pocket_note (name, desc, content, ctime, utime)
+	VALUES (?,?,?,?,?)
+	`, n.Name, n.Desc, n.Content, n.Ctime, n.Utime).Error
+
+	if err != nil {
+		return Note{}, fmt.Errorf("failed to save note, %v", err)
+	}
+
+	var id int
+	err = GetDB().Raw(`SELECT last_insert_rowid()`).Scan(&id).Error
+	if err != nil {
+		return Note{}, fmt.Errorf("failed to find id of newly saved note, %v", err)
+	}
+
+	n.Id = id
+	return n, nil
+}
+
+func EncryptNote(n Note) Note {
+	n.Content = Encrypt0(n.Content)
+	return n
+}
+
+func DecryptNote(n Note) Note {
+	n.Content = Decrypt0(n.Content)
+	return n
+}
+
+func UpdateNote(n Note) error {
+	n = EncryptNote(n)
+	err := GetDB().Exec(`
+	UPDATE pocket_note
+	SET name = ?, desc = ?, content = ?, utime = ?
+	WHERE rowid = ?
+	`, n.Name, n.Desc, n.Content, n.Utime, n.Id).Error
+	if err != nil {
+		return fmt.Errorf("failed to update pocket_note, %v", err)
+	}
+	return nil
+}
+
+func DeleteNote(note Note) error {
+	err := GetDB().Exec(`DELETE FROM pocket_note WHERE rowid = ?`, note.Id).Error
+	if err != nil {
+		return fmt.Errorf("failed to delete pocket_note, %v", err)
+	}
 	return nil
 }

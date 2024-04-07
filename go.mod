@@ -4,17 +4,17 @@ go 1.20
 
 require (
 	github.com/gdamore/tcell/v2 v2.7.1
-	github.com/mattn/go-sqlite3 v1.14.9 // indirect
+	github.com/mattn/go-sqlite3 v1.14.15 // indirect
 	github.com/rivo/tview v0.0.0-20240307173318-e804876934a1
 	github.com/spf13/cast v1.6.0
-	gorm.io/driver/sqlite v1.2.6
-	gorm.io/gorm v1.23.8
+	gorm.io/driver/sqlite v1.4.3
+	gorm.io/gorm v1.24.7-0.20230306060331-85eaf9eeda11
 )
 
 require (
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.4 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

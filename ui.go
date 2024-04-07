@@ -1,12 +1,9 @@
-/*
-TODO: Toast error message
-*/
+// TODO: Exit Confirm Dialog
 package main
 
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -22,6 +19,8 @@ const (
 	PageEdit     = "edit"
 	PageDelete   = "delete"
 	PageMsg      = "message"
+
+	PageLimit = 10
 )
 
 type Pocket struct {
@@ -69,8 +68,8 @@ func (l *ListPage) AddPage(delta int) int {
 func NewListPage(pocket *Pocket) *ListPage {
 	lp := new(ListPage)
 	lv := NewListView(pocket)
-	fetchPage := func() {
-		UIFetchNotes(pocket, pocket.ListPage.GetPage(), lv.name.Text)
+	fetchPage := func(p int) {
+		UIFetchNotes(pocket, p, lv.name.Text)
 	}
 	opt := NewOptionList().
 		AddItem("Select Item", "", 'l', func() {
@@ -82,21 +81,18 @@ func NewListPage(pocket *Pocket) *ListPage {
 			}
 		}).
 		AddItem("Create Item", "", 'c', func() {
-			PopCreateNotePage(pocket, fetchPage)
+			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
 		}).
 		AddItem("Search Param", "", '/', func() {
 			PopEditSearchPage(pocket)
 		}).
 		AddItem("Next Page", "", 'n', func() {
-			pocket.ListPage.AddPage(1)
 			lv.page.SetText(pocket.ListPage.GetPageStr())
-			fetchPage()
+			fetchPage(pocket.ListPage.pageNum + 1)
 		}).
 		AddItem("Prev Page", "", 'N', func() {
 			if pocket.ListPage.GetPage() > 1 {
-				n := pocket.ListPage.AddPage(-1)
-				lv.page.SetText(cast.ToString(n))
-				fetchPage()
+				fetchPage(pocket.ListPage.pageNum - 1)
 			}
 		}).
 		AddItem("Exit", "", 'q', func() { pocket.Stop() })
@@ -130,8 +126,7 @@ func PopEditSearchPage(pocket *Pocket) {
 			liv.name.SetText(tmpName)
 			closePopup()
 			if prevName != tmpName {
-				pocket.ListPage.pageNum = 1
-				UIFetchNotes(pocket, pocket.ListPage.pageNum, tmpName)
+				UIFetchNotes(pocket, 1, tmpName)
 			}
 			return nil
 		}
@@ -142,7 +137,7 @@ func PopEditSearchPage(pocket *Pocket) {
 	pages.AddPage(PageSearch, popup, true, true)
 }
 
-func PopEditNotePage(pocket *Pocket, it NoteItem) {
+func PopEditNotePage(pocket *Pocket, it Note) {
 	closePopup := func() {
 		pocket.ToPage(PageDetail)
 		pocket.DetailPage.Display(it)
@@ -150,22 +145,22 @@ func PopEditNotePage(pocket *Pocket, it NoteItem) {
 	}
 
 	form := NewForm()
-	var tmpName string = it.name
-	var tmpDesc string = it.desc
-	var tmpContent string = it.content
+	var tmpName string = it.Name
+	var tmpDesc string = it.Desc
+	var tmpContent string = it.Content
 
 	form.AddInputField("Name:", tmpName, 30, nil, func(t string) { tmpName = t })
 	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) { tmpDesc = t })
 	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) { tmpContent = t })
 
 	confirm := func() {
-		ni := NoteItem{
-			id:      it.id,
-			name:    tmpName,
-			desc:    tmpDesc,
-			content: tmpContent,
-			ctime:   it.ctime,
-			utime:   time.Now(),
+		ni := Note{
+			Id:      it.Id,
+			Name:    tmpName,
+			Desc:    tmpDesc,
+			Content: tmpContent,
+			Ctime:   it.Ctime,
+			Utime:   Now(),
 		}
 		UIEditNote(pocket, ni, func(err error) {
 			if err == nil {
@@ -199,19 +194,19 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) { tmpContent = t })
 
 	confirm := func() {
-		ctime := time.Now()
-		note := NoteItem{
-			name:    tmpName,
-			desc:    tmpDesc,
-			content: tmpContent,
-			ctime:   ctime,
-			utime:   ctime,
+		ctime := Now()
+		note := Note{
+			Name:    tmpName,
+			Desc:    tmpDesc,
+			Content: tmpContent,
+			Ctime:   ctime,
+			Utime:   ctime,
 		}
-		UICreateNote(pocket, note, func(err error) {
+		UICreateNote(pocket, note, func(nt Note, err error) {
 			pocket.ToPage(PageList)
 			if err == nil {
 				pocket.ToPage(PageDetail)
-				pocket.DetailPage.Display(note)
+				pocket.DetailPage.Display(nt)
 				onConfirm()
 			} else {
 				pocket.RemovePage(PageCreate)
@@ -221,7 +216,7 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.AddButton("Confirm", confirm)
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBorder(true).SetTitle(" Create Bootmark ")
+	form.SetBorder(true).SetTitle(" Create Note ")
 
 	popup := createPopup(pocket.Pages, form, 35, 100)
 	pocket.Pages.AddPage(PageCreate, popup, true, true)
@@ -336,22 +331,25 @@ type DetailView struct {
 	flex *tview.Flex
 
 	bar     *tview.TextView
+	id      *tview.TableCell
 	name    *tview.TableCell
 	ctime   *tview.TableCell
 	utime   *tview.TableCell
 	desc    *tview.TableCell
 	content *tview.TextView
 
-	Item NoteItem
+	Item Note
 }
 
-func (d *DetailView) Display(li NoteItem) {
-	d.name.SetText(li.name)
-	d.desc.SetText(li.desc)
-	d.content.SetText(li.content)
-	d.ctime.SetText(FormatTime(li.ctime))
-	d.utime.SetText(FormatTime(li.utime))
-	d.Item = li
+func (d *DetailView) Display(nt Note) {
+	Debugf("Display %#v", nt)
+	d.id.SetText(cast.ToString(nt.Id))
+	d.name.SetText(nt.Name)
+	d.desc.SetText(nt.Desc)
+	d.content.SetText(nt.Content)
+	d.ctime.SetText(nt.Ctime.FormatClassic())
+	d.utime.SetText(nt.Utime.FormatClassic())
+	d.Item = nt
 }
 
 func NewDetailView(pocket *Pocket) (iv *DetailView) {
@@ -367,25 +365,35 @@ func NewDetailView(pocket *Pocket) (iv *DetailView) {
 	tb := tview.NewTable()
 	tb.SetBorder(true).SetTitle(" Info ")
 
-	tb.SetCellSimple(0, 1, "Name:")
-	tb.GetCell(0, 1).SetAlign(tview.AlignRight)
+	r := 0
+	tb.SetCellSimple(r, 1, "ID:")
+	tb.GetCell(r, 1).SetAlign(tview.AlignRight)
+	iv.id = tview.NewTableCell("")
+	tb.SetCell(r, 2, iv.id)
+
+	r += 1
+	tb.SetCellSimple(r, 1, "Name:")
+	tb.GetCell(r, 1).SetAlign(tview.AlignRight)
 	iv.name = tview.NewTableCell("")
-	tb.SetCell(0, 2, iv.name)
+	tb.SetCell(r, 2, iv.name)
 
-	tb.SetCellSimple(1, 1, "Create Time:")
-	tb.GetCell(1, 1).SetAlign(tview.AlignRight)
+	r += 1
+	tb.SetCellSimple(r, 1, "Create Time:")
+	tb.GetCell(r, 1).SetAlign(tview.AlignRight)
 	iv.ctime = tview.NewTableCell("")
-	tb.SetCell(1, 2, iv.ctime)
+	tb.SetCell(r, 2, iv.ctime)
 
-	tb.SetCellSimple(2, 1, "Update Time:")
-	tb.GetCell(2, 1).SetAlign(tview.AlignRight)
+	r += 1
+	tb.SetCellSimple(r, 1, "Update Time:")
+	tb.GetCell(r, 1).SetAlign(tview.AlignRight)
 	iv.utime = tview.NewTableCell("")
-	tb.SetCell(2, 2, iv.utime)
+	tb.SetCell(r, 2, iv.utime)
 
-	tb.SetCellSimple(3, 1, "Description:")
-	tb.GetCell(3, 1).SetAlign(tview.AlignRight)
+	r += 1
+	tb.SetCellSimple(r, 1, "Description:")
+	tb.GetCell(r, 1).SetAlign(tview.AlignRight)
 	iv.desc = tview.NewTableCell("")
-	tb.SetCell(3, 2, iv.desc)
+	tb.SetCell(r, 2, iv.desc)
 
 	infp := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(tb, 0, 1, false)
@@ -415,48 +423,45 @@ type ListView struct {
 	pageNum int
 }
 
-type NoteItem struct {
-	id      int
-	name    string
-	desc    string
-	content string
-	ctime   time.Time
-	utime   time.Time
-}
-
 type ListItemPrimitive struct {
 	*tview.Table
-	NoteItem
+	Note
 }
 
 func (l *ListView) ClearNotes() {
 	l.content.Clear()
 }
 
-func (l *ListView) AddNote(itm NoteItem) {
+func (l *ListView) AddNote(it Note) {
 	tb := tview.NewTable()
 	lip := new(ListItemPrimitive)
 	lip.Table = tb
-	lip.NoteItem = itm
+	lip.Note = it
 	tb.SetBorder(true)
 
 	tb.SetCellSimple(0, 0, "Id:")
 	tb.GetCell(0, 0).SetAlign(tview.AlignRight)
-	idc := tview.NewTableCell(cast.ToString(itm.id))
+	idc := tview.NewTableCell(cast.ToString(it.Id))
 	tb.SetCell(0, 1, idc)
 
 	tb.SetCellSimple(1, 0, "Name:")
 	tb.GetCell(1, 0).SetAlign(tview.AlignRight)
-	namec := tview.NewTableCell(itm.name)
+	namec := tview.NewTableCell(it.Name)
 	tb.SetCell(1, 1, namec)
 
 	tb.SetCellSimple(2, 0, "Description:")
 	tb.GetCell(2, 0).SetAlign(tview.AlignRight)
-	descc := tview.NewTableCell(itm.desc)
+	descc := tview.NewTableCell(it.Desc)
 	tb.SetCell(2, 1, descc)
+
+	tb.SetCellSimple(3, 0, "Updated At:")
+	tb.GetCell(3, 0).SetAlign(tview.AlignRight)
+	utimec := tview.NewTableCell(it.Utime.FormatClassic())
+	tb.SetCell(3, 1, utimec)
+
 	lip.SetFocusFunc(func() { lip.SetBorderColor(tcell.ColorYellow) })
 	lip.SetBlurFunc(func() { lip.SetBorderColor(tcell.ColorWhite) })
-	l.content.AddItem(lip, 5, 1, false)
+	l.content.AddItem(lip, 6, 1, false)
 }
 
 func NewListView(pocket *Pocket) (iv *ListView) {
@@ -503,7 +508,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 			if ok {
 				itm := iv.content.GetItem(j)
 				lip := itm.(*ListItemPrimitive)
-				pocket.DetailPage.Display(lip.NoteItem)
+				pocket.DetailPage.Display(lip.Note)
 				pocket.Pages.SwitchToPage(PageDetail)
 			}
 			return nil
@@ -554,10 +559,6 @@ func FindFocus(f *tview.Flex) (int, bool) {
 	return i, i > -1
 }
 
-func FormatTime(t time.Time) string {
-	return t.Format("2006/01/02 15:04:05")
-}
-
 // Form with grey background color, and only uses Shift+Tab to move cursor between inputs/buttons to support typing \t in textarea.
 func NewForm() *tview.Form {
 	form := tview.NewForm()
@@ -593,7 +594,7 @@ func FindFocusedTextArea(form *tview.Form) (*tview.TextArea, int, bool) {
 	return nil, 0, false
 }
 
-func PopDeleteNotePage(pocket *Pocket, it NoteItem) {
+func PopDeleteNotePage(pocket *Pocket, it Note) {
 	form := NewForm()
 	close := func() { pocket.RemovePage(PageDelete) }
 	confirm := func() {
@@ -605,7 +606,7 @@ func PopDeleteNotePage(pocket *Pocket, it NoteItem) {
 		})
 		close()
 	}
-	form.AddTextView("", fmt.Sprintf("Deleting %v", it.name), 40, 5, false, true)
+	form.AddTextView("", fmt.Sprintf("Deleting %v", it.Name), 40, 5, false, true)
 	form.AddButton("Confirm", confirm)
 	form.SetCancelFunc(close)
 	form.SetButtonsAlign(tview.AlignCenter)
@@ -615,30 +616,39 @@ func PopDeleteNotePage(pocket *Pocket, it NoteItem) {
 	pocket.Pages.AddPage(PageDelete, popup, true, true)
 }
 
-func UIDeleteNote(pocket *Pocket, nt NoteItem, callback func(err error)) {
+func UIDeleteNote(pocket *Pocket, nt Note, callback func(err error)) {
 	go func() {
 		err := StDeleteNote(nt)
 		callback(err)
 	}()
 }
 
-func UIEditNote(pocket *Pocket, note NoteItem, callback func(err error)) {
+func UIEditNote(pocket *Pocket, note Note, callback func(err error)) {
 	go func() {
 		err := StEditNote(note)
 		callback(err)
 	}()
 }
-func UICreateNote(pocket *Pocket, note NoteItem, callback func(err error)) {
+func UICreateNote(pocket *Pocket, note Note, callback func(note Note, err error)) {
 	go func() {
-		err := StCreateNote(note)
-		callback(err)
+		note, err := StCreateNote(note)
+		callback(note, err)
 	}()
 }
 func UIFetchNotes(pocket *Pocket, page int, name string) {
 	go func() {
-		items, err := StFetchNotes(page, name)
+		items, err := StFetchNotes(page, PageLimit, name)
 		if err == nil {
 			pocket.QueueCommand(func() {
+				prev := pocket.ListPage.pageNum
+				if prev != page {
+					if page > prev && len(items) < 1 { // displyaing next page, but the page is empty
+						return
+					}
+
+					pocket.ListPage.pageNum = page
+					pocket.ListPage.page.SetText(cast.ToString(page))
+				}
 				pocket.ListPage.ClearNotes()
 				for _, it := range items {
 					pocket.ListPage.AddNote(it)
