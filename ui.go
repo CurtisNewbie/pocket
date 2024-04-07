@@ -6,7 +6,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -24,64 +23,6 @@ const (
 	PageDelete   = "delete"
 	PageMsg      = "message"
 )
-
-// Storage API Contract
-var (
-	StDeleteNote    func(it NoteItem) error
-	StEditNote      func(note NoteItem) error
-	StCreateNote    func(note NoteItem) error
-	StFetchNotes    func(page int, name string) ([]NoteItem, error)
-	StCheckPassword func(pw string) bool
-)
-
-func init() {
-	// TODO: for demo only
-	StDeleteNote = func(it NoteItem) error {
-		Debugf("Delete note %#v", it)
-		return nil
-	}
-	StEditNote = func(note NoteItem) error {
-		Debugf("Edit note %#v", note)
-		return nil
-	}
-	StCreateNote = func(note NoteItem) error {
-		Debugf("Create note %#v", note)
-		return nil
-	}
-	StFetchNotes = func(page int, name string) ([]NoteItem, error) {
-		Debugf("Fetch page, %v, name: %v", page, name)
-		return []NoteItem{
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			}, {
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-			{
-				id:   rand.Intn(10),
-				name: "yo",
-				desc: "yo it's me",
-			},
-		}, nil
-	}
-	StCheckPassword = func(pw string) bool {
-		Debugf("Checking passward")
-		return true
-	}
-}
 
 type Pocket struct {
 	*tview.Application
@@ -719,12 +660,26 @@ func PopPasswordPage(pocket *Pocket, onConfirm func()) {
 			PopMsg(pocket, err.Error())
 			return
 		}
-		if !StCheckPassword(tmppw) {
-			PopMsg(pocket, "password incorrect")
-			return
+
+		InitPassword(tmppw)
+
+		{
+			ok, err := StCheckPassword(tmppw)
+			if err != nil {
+				PopMsg(pocket, err.Error())
+				return
+			}
+			if !ok {
+				PopMsg(pocket, "password incorrect")
+				return
+			}
+
+			if err := StInitSchema(); err != nil {
+				PopMsg(pocket, err.Error())
+				return
+			}
 		}
 
-		password = []byte(tmppw) // stored in memory
 		pocket.RemovePage(PagePassword)
 		pocket.ToPage(PageList)
 		onConfirm()
