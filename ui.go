@@ -480,7 +480,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 	iv = new(ListView)
 	iv.pageNum = 1
 	iv.bar = tview.NewTextView()
-	iv.bar.SetText(`List View`)
+	iv.bar.SetText(`Notes`)
 	iv.bar.SetBorder(true)
 	iv.bar.SetTextAlign(tview.AlignCenter)
 	topFlex.AddItem(iv.bar, 3, 1, false)
