@@ -106,8 +106,8 @@ func InitSchema() error {
 	err := GetDB().Exec(`
 		CREATE TABLE IF NOT EXISTS pocket_config (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			config_key VARCHAR(30) NOT NULL,
-			config_value VARCHAR(255) NOT NULL
+			config_key TEXT NOT NULL,
+			config_value TEXT NOT NULL
 		)
 	`).Error
 	if err != nil {
@@ -127,5 +127,23 @@ func InitSchema() error {
 	}
 
 	err = GetDB().Exec(`INSERT INTO pocket_config (config_key, config_value) VALUES (?,?)`, CKeyPwTest, val).Error
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to init pocket_config record, %v", err)
+	}
+
+	err = GetDB().Exec(`
+		CREATE VIRTUAL TABLE IF NOT EXISTS pocket_note USING fts4 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			desc TEXT NOT NULL,
+			content TEXT NOT NULL,
+			ctime DATE NOT NULL,
+			utime DATE NOT NULL
+		)
+	`).Error
+	if err != nil {
+		return fmt.Errorf("failed to initialize schema, %v", err)
+	}
+
+	return nil
 }
