@@ -4,9 +4,9 @@ TODO: Toast error message
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -22,22 +22,33 @@ const (
 	PageCreate   = "create"
 	PageEdit     = "edit"
 	PageDelete   = "delete"
+	PageMsg      = "message"
 )
 
+// Storage API Contract
 var (
-	StDeleteNote func(it NoteItem) error = func(it NoteItem) error {
+	StDeleteNote    func(it NoteItem) error
+	StEditNote      func(note NoteItem) error
+	StCreateNote    func(note NoteItem) error
+	StFetchNotes    func(page int, name string) ([]NoteItem, error)
+	StCheckPassword func(pw string) bool
+)
+
+func init() {
+	// TODO: for demo only
+	StDeleteNote = func(it NoteItem) error {
 		Debugf("Delete note %#v", it)
 		return nil
 	}
-	StEditNote func(note NoteItem) error = func(note NoteItem) error {
+	StEditNote = func(note NoteItem) error {
 		Debugf("Edit note %#v", note)
 		return nil
 	}
-	StCreateNote func(note NoteItem) error = func(note NoteItem) error {
+	StCreateNote = func(note NoteItem) error {
 		Debugf("Create note %#v", note)
 		return nil
 	}
-	StFetchNotes func(page int, name string) ([]NoteItem, error) = func(page int, name string) ([]NoteItem, error) {
+	StFetchNotes = func(page int, name string) ([]NoteItem, error) {
 		Debugf("Fetch page, %v, name: %v", page, name)
 		return []NoteItem{
 			{
@@ -66,17 +77,17 @@ var (
 			},
 		}, nil
 	}
-)
+	StCheckPassword = func(pw string) bool {
+		Debugf("Checking passward")
+		return true
+	}
+}
 
 type Pocket struct {
-	App        *tview.Application
+	*tview.Application
 	Pages      *tview.Pages
 	DetailPage *DetailPage
 	ListPage   *ListPage
-}
-
-func (p *Pocket) Run() error {
-	return p.App.Run()
 }
 
 func (p *Pocket) ToPage(page string) {
@@ -88,11 +99,7 @@ func (p *Pocket) RemovePage(page string) {
 }
 
 func (p *Pocket) QueueCommand(f func()) {
-	p.App.QueueUpdateDraw(f)
-}
-
-func (p *Pocket) Stop() {
-	p.App.Stop()
+	p.QueueUpdateDraw(f)
 }
 
 type ListPage struct {
@@ -128,9 +135,9 @@ func NewListPage(pocket *Pocket) *ListPage {
 		AddItem("Select Item", "", 'l', func() {
 			c := lv.content.GetItemCount()
 			if c < 1 {
-				pocket.App.SetFocus(lv.content)
+				pocket.SetFocus(lv.content)
 			} else {
-				pocket.App.SetFocus(lv.content.GetItem(0))
+				pocket.SetFocus(lv.content.GetItem(0))
 			}
 		}).
 		AddItem("Create Item", "", 'c', func() {
@@ -326,8 +333,8 @@ func NewApp() *Pocket {
 	app := tview.NewApplication()
 	pages := tview.NewPages()
 	pocket := &Pocket{
-		App:   app,
-		Pages: pages,
+		Application: app,
+		Pages:       pages,
 	}
 
 	detailPage := NewDetailPage(pocket)
@@ -446,7 +453,7 @@ func NewDetailView(pocket *Pocket) (iv *DetailView) {
 
 	iv.content = tview.NewTextView()
 	iv.content.SetBorder(true).SetTitle(" Content ")
-	iv.content.SetChangedFunc(func() { pocket.App.Draw() })
+	iv.content.SetChangedFunc(func() { pocket.Draw() })
 
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(topFlex, 10, 1, true).
@@ -546,7 +553,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
 		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' || evt.Rune() == 'h' {
-			pocket.App.SetFocus(pocket.ListPage.Options)
+			pocket.SetFocus(pocket.ListPage.Options)
 			return nil
 		}
 
@@ -570,15 +577,15 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 				switch r {
 				case 'j':
 					if i < l-1 {
-						pocket.App.SetFocus(iv.content.GetItem(i + 1))
+						pocket.SetFocus(iv.content.GetItem(i + 1))
 					}
 				case 'k':
 					if i > 0 {
-						pocket.App.SetFocus(iv.content.GetItem(i - 1))
+						pocket.SetFocus(iv.content.GetItem(i - 1))
 					}
 				}
 			} else if l > 0 {
-				pocket.App.SetFocus(iv.content.GetItem(0))
+				pocket.SetFocus(iv.content.GetItem(0))
 			}
 		}
 		return evt
@@ -703,15 +710,21 @@ func UIFetchNotes(pocket *Pocket, page int, name string) {
 func PopPasswordPage(pocket *Pocket, onConfirm func()) {
 	form := NewForm()
 
-	// TODO: Validate input
 	var tmppw string = ""
-	form.AddInputField("Password (8-32 english characters):", tmppw, 32, nil,
-		func(t string) {
-			tmppw = t
-		})
+	form.AddPasswordField("Password (8-32 english characters [0-9a-zA-Z-_!.]):", tmppw, 32, '*',
+		func(t string) { tmppw = t })
 
 	form.AddButton("Confirm", func() {
-		password = []byte(strings.TrimSpace(tmppw))
+		if err := ValidatePassword(tmppw); err != nil {
+			PopMsg(pocket, err.Error())
+			return
+		}
+		if !StCheckPassword(tmppw) {
+			PopMsg(pocket, "password incorrect")
+			return
+		}
+
+		password = []byte(tmppw) // stored in memory
 		pocket.RemovePage(PagePassword)
 		pocket.ToPage(PageList)
 		onConfirm()
@@ -722,4 +735,38 @@ func PopPasswordPage(pocket *Pocket, onConfirm func()) {
 
 	popup := createPopup(pocket.Pages, form, 35, 100)
 	pocket.Pages.AddPage(PagePassword, popup, true, true)
+}
+
+func ValidatePassword(s string) error {
+	n := 0
+	for _, c := range s {
+		n += 1
+		if c >= '0' && c <= '9' {
+			continue
+		}
+		if c >= 'A' && c <= 'z' {
+			continue
+		}
+		if c == '-' || c == '_' || c == '!' {
+			continue
+		}
+		return fmt.Errorf("contains illegal character '%s'\ncan only contains 8-32 english characters\n[0-9a-zA-Z-_!.]", string(c))
+	}
+
+	if n < 8 {
+		return errors.New("password too short")
+	}
+	return nil
+}
+
+func PopMsg(pocket *Pocket, pat string, args ...any) {
+	form := NewForm()
+	close := func() { pocket.RemovePage(PageMsg) }
+	form.AddTextView("", fmt.Sprintf(pat, args...), 50, 5, false, true)
+	form.AddButton("Confirm", close)
+	form.SetCancelFunc(close)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetBorder(true).SetTitle(" Message ")
+	popup := createPopup(pocket.Pages, form, 15, 50)
+	pocket.Pages.AddPage(PageMsg, popup, true, true)
 }

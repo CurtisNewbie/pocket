@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	debug    = flag.Bool("debug", false, "enable debug log")
-	database = flag.String("db", "", "sqlite database file, default to $HOME/pocket")
+	_debug    = flag.Bool("debug", false, "enable debug log")
+	_database = flag.String("db", "", "sqlite database file, default to $HOME/pocket")
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 func main() {
 	flag.Parse()
 
-	if *debug {
+	if *_debug {
 		_debugLogFile, _ = os.Create("debug.log")
 		defer _debugLogFile.Close()
 		log.SetOutput(_debugLogFile)
@@ -29,23 +29,23 @@ func main() {
 		_debugLogPipe = make(chan func(*log.Logger), 50)
 		go func() {
 			for f := range _debugLogPipe {
-				if *debug {
+				if *_debug {
 					f(_debugLogger)
 				}
 			}
 		}()
 	}
 
-	if *database == "" {
+	if *_database == "" {
 		if v, ok := os.LookupEnv(EnvSqliteFile); ok {
 			v = strings.TrimSpace(v)
 			if v != "" {
-				*database = v
+				*_database = v
 			}
 		}
 	}
 
-	if *database == "" {
+	if *_database == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			panic(err)
@@ -56,10 +56,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		*database = pdir + sp + "pocket.db"
+		*_database = pdir + sp + "pocket.db"
 	}
 
-	if err := OpenDB(*database, *debug, _debugLogFile); err != nil {
+	if err := OpenDB(*_database, *_debug, _debugLogFile); err != nil {
 		panic(err)
 	}
 
