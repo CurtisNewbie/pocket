@@ -132,12 +132,12 @@ func FetchNotes(page int, limit int, name string) ([]Note, error) {
 }
 
 func CreateNote(n Note) (Note, error) {
-	n = EncryptNote(n)
+	en := EncryptNote(n)
 
 	err := GetDB().Exec(`
 	INSERT INTO pocket_note (name, desc, content, ctime, utime)
 	VALUES (?,?,?,?,?)
-	`, n.Name, n.Desc, n.Content, n.Ctime, n.Utime).Error
+	`, en.Name, en.Desc, en.Content, en.Ctime, en.Utime).Error
 
 	if err != nil {
 		return Note{}, fmt.Errorf("failed to save note, %v", err)
