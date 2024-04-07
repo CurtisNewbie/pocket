@@ -34,7 +34,7 @@ type Note struct {
 
 func CheckPassword(pw string) (bool, error) {
 	var n string
-	err := GetDB().Raw(`SELECT name FROM sqlite_master WHERE type ='table' AND name = 'pocket_config'`).Scan(&n).Error
+	err := GetDB().Raw(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pocket_config'`).Scan(&n).Error
 	if err != nil {
 		return false, fmt.Errorf("failed to query database, %v", err)
 	}
@@ -52,7 +52,8 @@ func CheckPassword(pw string) (bool, error) {
 	}
 	val, err = Decrypt(val)
 	if err != nil {
-		return false, err
+		Debugf("Check password failed, %v", err)
+		return false, nil
 	}
 	return val == CKeyPwTest, nil
 }

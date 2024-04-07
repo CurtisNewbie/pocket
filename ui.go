@@ -20,6 +20,7 @@ const (
 	PageDelete   = "delete"
 	PageMsg      = "message"
 	PageExit     = "exit"
+	PageConfirm  = "confirm"
 
 	PageLimit = 10
 )
@@ -73,9 +74,6 @@ func NewListPage(pocket *Pocket) *ListPage {
 		UIFetchNotes(pocket, p, lv.name.Text)
 	}
 	opt := NewOptionList().
-		AddItem("Search Param", "", '/', func() {
-			PopEditSearchPage(pocket)
-		}).
 		AddItem("Create Item", "", 'c', func() {
 			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
 		}).
@@ -84,6 +82,9 @@ func NewListPage(pocket *Pocket) *ListPage {
 			if c > 0 {
 				pocket.SetFocus(lv.content.GetItem(0))
 			}
+		}).
+		AddItem("Search Param", "", '/', func() {
+			PopEditSearchPage(pocket)
 		}).
 		AddItem("Next Page", "", 'n', func() {
 			lv.page.SetText(pocket.ListPage.GetPageStr())
@@ -170,7 +171,9 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	}
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
-	form.SetCancelFunc(func() {}) // ignored
+	form.SetCancelFunc(func() {
+		PopConfirmDialog(pocket, closePopup, "Close Dialog?", 50, 15)
+	})
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Edit Note ")
 
@@ -215,8 +218,9 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	}
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
-	form.SetCancelFunc(func() {}) // ignored
-
+	form.SetCancelFunc(func() {
+		PopConfirmDialog(pocket, closePopup, "Close Dialog?", 50, 15)
+	})
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Create Note ")
 
@@ -251,8 +255,7 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 		AddItem("Delete", "", 'D', func() {
 			PopDeleteNotePage(pocket, vw.Item)
 		}).
-		AddItem("Mask", "", 'm', vw.MaskNote).
-		AddItem("Unmask", "", 'M', vw.UnmaskNote).
+		AddItem("Mask/Unmask", "", 'm', vw.MaskNote).
 		AddItem("Exit", "", 'q', func() {
 			pocket.Pages.SwitchToPage(PageList)
 		})
@@ -338,16 +341,18 @@ type DetailView struct {
 	desc    *tview.TableCell
 	content *tview.TextView
 
-	Item Note
+	Item   Note
+	Masked bool
 }
 
 func (d *DetailView) MaskNote() {
-	s := strings.Repeat("*", len([]rune(d.Item.Content)))
-	d.content.SetText(s)
-}
-
-func (d *DetailView) UnmaskNote() {
-	d.content.SetText(d.Item.Content)
+	if d.Masked {
+		d.content.SetText(d.Item.Content)
+	} else {
+		s := strings.Repeat("*", len([]rune(d.Item.Content)))
+		d.content.SetText(s)
+	}
+	d.Masked = !d.Masked
 }
 
 func (d *DetailView) Display(nt Note) {
@@ -755,13 +760,21 @@ func PopMsg(pocket *Pocket, pat string, args ...any) {
 }
 
 func PopExitPage(pocket *Pocket) {
+	PopConfirmDialog(pocket, func() { pocket.Stop() }, "Exit Pocket?", 40, 15)
+}
+
+func PopConfirmDialog(pocket *Pocket, confirm func(), msg string, width int, height int) {
 	form := NewForm()
-	form.AddTextView("", "Exit Pocket?", 40, 5, false, true)
-	form.AddButton("Yes", func() { pocket.Stop() })
-	form.SetCancelFunc(func() { pocket.RemovePage(PageExit) })
+	close := func() { pocket.RemovePage(PageConfirm) }
+	form.AddTextView("", msg, width, height-10, false, true)
+	if confirm == nil {
+		confirm = close
+	}
+	form.AddButton("Confirm", confirm)
+	form.SetCancelFunc(close)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBorder(true).SetTitle(" Exit Confirm ")
-	popup := createPopup(pocket.Pages, form, 15, 40)
-	pocket.Pages.AddPage(PageExit, popup, true, true)
+	form.SetBorder(true).SetTitle(" Message ")
+	popup := createPopup(pocket.Pages, form, height, width)
+	pocket.Pages.AddPage(PageConfirm, popup, true, true)
 	pocket.SetFocus(form.GetButton(0))
 }
