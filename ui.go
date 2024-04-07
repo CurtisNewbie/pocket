@@ -81,9 +81,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 		}).
 		AddItem("Select Item", "", 'l', func() {
 			c := lv.content.GetItemCount()
-			if c < 1 {
-				pocket.SetFocus(lv.content)
-			} else {
+			if c > 0 {
 				pocket.SetFocus(lv.content.GetItem(0))
 			}
 		}).
@@ -747,12 +745,13 @@ func PopMsg(pocket *Pocket, pat string, args ...any) {
 	form := NewForm()
 	close := func() { pocket.RemovePage(PageMsg) }
 	form.AddTextView("", fmt.Sprintf(pat, args...), 50, 5, false, true)
-	form.AddButton("Confirm", close)
+	form.AddButton("Okay", close)
 	form.SetCancelFunc(close)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Message ")
 	popup := createPopup(pocket.Pages, form, 15, 50)
 	pocket.Pages.AddPage(PageMsg, popup, true, true)
+	pocket.SetFocus(form.GetButton(0))
 }
 
 func PopExitPage(pocket *Pocket) {
@@ -764,4 +763,5 @@ func PopExitPage(pocket *Pocket) {
 	form.SetBorder(true).SetTitle(" Exit Confirm ")
 	popup := createPopup(pocket.Pages, form, 15, 40)
 	pocket.Pages.AddPage(PageExit, popup, true, true)
+	pocket.SetFocus(form.GetButton(0))
 }
