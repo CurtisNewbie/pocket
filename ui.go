@@ -224,7 +224,7 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Create Note ")
 
-	popup := createPopup(pocket.Pages, form, 35, 100)
+	popup := createPopup(pocket.Pages, form, 35, 120)
 	pocket.Pages.AddPage(PageCreate, popup, true, true)
 }
 
@@ -382,7 +382,7 @@ func NewDetailView(pocket *Pocket) (iv *DetailView) {
 	tb.SetBorder(true).SetTitle(" Info ")
 
 	r := 0
-	tb.SetCellSimple(r, 1, "ID:")
+	tb.SetCellSimple(r, 1, "Id:")
 	tb.GetCell(r, 1).SetAlign(tview.AlignRight)
 	iv.id = tview.NewTableCell("")
 	tb.SetCell(r, 2, iv.id)
@@ -496,12 +496,12 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 
 	tb.SetCellSimple(0, 1, "Name:")
 	tb.GetCell(0, 1).SetAlign(tview.AlignRight)
-	iv.name = tview.NewTableCell("")
+	iv.name = tview.NewTableCell("").SetTextColor(tview.Styles.SecondaryTextColor)
 	tb.SetCell(0, 2, iv.name)
 
 	tb.SetCellSimple(1, 1, "Page:")
 	tb.GetCell(1, 1).SetAlign(tview.AlignRight)
-	iv.page = tview.NewTableCell("1")
+	iv.page = tview.NewTableCell("1").SetTextColor(tview.Styles.SecondaryTextColor)
 	tb.SetCell(1, 2, iv.page)
 
 	infp := tview.NewFlex().
@@ -588,7 +588,6 @@ func NewForm() *tview.Form {
 	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 
 		// DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
-
 		if ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModNone { // only TAB, append at the end \t
 			ta, _, ok := FindFocusedTextArea(form)
 			if ok {
