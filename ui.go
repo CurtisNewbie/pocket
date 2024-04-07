@@ -1,4 +1,3 @@
-// TODO: Exit Confirm Dialog
 package main
 
 import (
@@ -20,6 +19,7 @@ const (
 	PageEdit     = "edit"
 	PageDelete   = "delete"
 	PageMsg      = "message"
+	PageExit     = "exit"
 
 	PageLimit = 10
 )
@@ -96,7 +96,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 				fetchPage(pocket.ListPage.pageNum - 1)
 			}
 		}).
-		AddItem("Exit", "", 'q', func() { pocket.Stop() })
+		AddItem("Exit", "", 'q', func() { PopExitPage(pocket) })
 
 	cp := NewContentPlane(opt, lv.flex)
 	lp.Options = opt
@@ -750,4 +750,15 @@ func PopMsg(pocket *Pocket, pat string, args ...any) {
 	form.SetBorder(true).SetTitle(" Message ")
 	popup := createPopup(pocket.Pages, form, 15, 50)
 	pocket.Pages.AddPage(PageMsg, popup, true, true)
+}
+
+func PopExitPage(pocket *Pocket) {
+	form := NewForm()
+	form.AddTextView("", "Exit Pocket?", 40, 5, false, true)
+	form.AddButton("Yes", func() { pocket.Stop() })
+	form.SetCancelFunc(func() { pocket.RemovePage(PageExit) })
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetBorder(true).SetTitle(" Exit Confirm ")
+	popup := createPopup(pocket.Pages, form, 15, 40)
+	pocket.Pages.AddPage(PageExit, popup, true, true)
 }
