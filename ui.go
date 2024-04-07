@@ -171,7 +171,8 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 		})
 	}
 	form.AddButton("Confirm", confirm)
-	form.SetCancelFunc(closePopup)
+	form.AddButton("Close", closePopup)
+	form.SetCancelFunc(func() {}) // ignored
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Edit Note ")
 
@@ -215,7 +216,9 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 		})
 	}
 	form.AddButton("Confirm", confirm)
-	form.SetCancelFunc(closePopup)
+	form.AddButton("Close", closePopup)
+	form.SetCancelFunc(func() {}) // ignored
+
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Create Note ")
 
