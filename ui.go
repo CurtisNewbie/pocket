@@ -589,7 +589,7 @@ func FindFocus(f *tview.Flex) (int, bool) {
 // Form with grey background color, and only uses Shift+Tab to move cursor between inputs/buttons to support typing \t in textarea.
 func NewForm() *tview.Form {
 	form := tview.NewForm()
-	form.SetFieldBackgroundColor(tcell.ColorDarkSlateGrey)
+	form.SetFieldBackgroundColor(tcell.ColorNavy.TrueColor())
 	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 
 		// DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
@@ -690,27 +690,32 @@ func PopPasswordPage(pocket *Pocket, onConfirm func()) {
 	form.AddPasswordField("Password (8-32 english characters [0-9a-zA-Z-_!.]):", tmppw, 32, '*',
 		func(t string) { tmppw = t })
 
+	resetPasswordField := func(msg string) {
+		ni := form.GetFormItem(0).(*tview.InputField)
+		ni.SetText("")
+		PopMsg(pocket, func() { pocket.SetFocus(ni) }, msg)
+	}
+
 	form.AddButton("Confirm", func() {
 		if err := ValidatePassword(tmppw); err != nil {
-			PopMsg(pocket, err.Error())
+			PopMsg(pocket, nil, err.Error())
 			return
 		}
-
 		InitPassword(tmppw)
 
 		{
 			ok, err := StCheckPassword(tmppw)
 			if err != nil {
-				PopMsg(pocket, err.Error())
+				resetPasswordField(err.Error())
 				return
 			}
 			if !ok {
-				PopMsg(pocket, "password incorrect")
+				resetPasswordField("password incorrect")
 				return
 			}
 
 			if err := StInitSchema(); err != nil {
-				PopMsg(pocket, err.Error())
+				PopMsg(pocket, nil, err.Error())
 				return
 			}
 		}
@@ -749,9 +754,14 @@ func ValidatePassword(s string) error {
 	return nil
 }
 
-func PopMsg(pocket *Pocket, pat string, args ...any) {
+func PopMsg(pocket *Pocket, onClosed func(), pat string, args ...any) {
 	form := NewForm()
-	close := func() { pocket.RemovePage(PageMsg) }
+	close := func() {
+		pocket.RemovePage(PageMsg)
+		if onClosed != nil {
+			onClosed()
+		}
+	}
 	form.AddTextView("", fmt.Sprintf(pat, args...), 50, 5, false, true)
 	form.AddButton("Okay", close)
 	form.SetCancelFunc(close)
