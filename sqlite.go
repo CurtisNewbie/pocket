@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const (
@@ -19,10 +23,22 @@ func GetDB() *gorm.DB {
 	return sqliteDb
 }
 
-func OpenDB(file string) error {
+func NewGormDebugLogger(debugOut io.Writer) logger.Interface {
+	return logger.New(log.New(debugOut, "\r\n", log.LstdFlags), logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  logger.Info,
+		IgnoreRecordNotFoundError: false,
+		Colorful:                  false,
+	})
+}
+
+func OpenDB(file string, debug bool, debugOut io.Writer) error {
 	sq, err := newSqlite(file)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite file, file: %v, %v", file, err)
+	}
+	if debug {
+		sq.Logger = NewGormDebugLogger(debugOut)
 	}
 	sqliteDb = sq
 

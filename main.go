@@ -13,16 +13,18 @@ var (
 )
 
 var (
+	_debugLogFile *os.File
 	_debugLogger  *log.Logger
 	_debugLogPipe chan func(logger *log.Logger)
 )
 
 func main() {
 	flag.Parse()
+
 	if *debug {
-		f, _ := os.Create("debug.log")
-		defer f.Close()
-		log.SetOutput(f)
+		_debugLogFile, _ = os.Create("debug.log")
+		defer _debugLogFile.Close()
+		log.SetOutput(_debugLogFile)
 		_debugLogger = log.Default()
 		_debugLogPipe = make(chan func(*log.Logger), 50)
 		go func() {
@@ -57,7 +59,7 @@ func main() {
 		*database = pdir + sp + "pocket.db"
 	}
 
-	if err := OpenDB(*database); err != nil {
+	if err := OpenDB(*database, *debug, _debugLogFile); err != nil {
 		panic(err)
 	}
 
