@@ -255,7 +255,7 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 		AddItem("Delete", "", 'D', func() {
 			PopDeleteNotePage(pocket, vw.Item)
 		}).
-		AddItem("Mask/Unmask", "", 'm', vw.MaskNote).
+		AddItem("Mask/Unmask", "", 'm', vw.SwitchMasking).
 		AddItem("Exit", "", 'q', func() {
 			pocket.Pages.SwitchToPage(PageList)
 		})
@@ -346,6 +346,11 @@ type DetailView struct {
 }
 
 func (d *DetailView) MaskNote() {
+	d.Masked = false
+	d.SwitchMasking()
+}
+
+func (d *DetailView) SwitchMasking() {
 	if d.Masked {
 		d.content.SetText(d.Item.Content)
 	} else {
@@ -588,17 +593,16 @@ func NewForm() *tview.Form {
 	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 
 		// DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
-		if ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModNone { // only TAB, append at the end \t
-			ta, _, ok := FindFocusedTextArea(form)
-			if ok {
-				ta.SetText(ta.GetText()+"\t", true)
-				return nil
-			}
-		}
 
-		if (ev.Key() == tcell.KeyBacktab) || (ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModNone) { // Shift+Tab, switch to next input
-			return tcell.NewEventKey(tcell.KeyTAB, 0, tcell.ModNone)
-		}
+		// TODO: Not very intuitive
+		// Shift+Tab, always append at the end \t
+		// if (ev.Key() == tcell.KeyBacktab) || (ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModShift) {
+		// 	ta, _, ok := FindFocusedTextArea(form)
+		// 	if ok {
+		// 		ta.SetText(ta.GetText()+"\t", true)
+		// 	}
+		// 	return nil
+		// }
 
 		return ev
 	})
@@ -719,7 +723,7 @@ func PopPasswordPage(pocket *Pocket, onConfirm func()) {
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Enter Password ")
 
-	popup := createPopup(pocket.Pages, form, 35, 100)
+	popup := createPopup(pocket.Pages, form, 15, 100)
 	pocket.Pages.AddPage(PagePassword, popup, true, true)
 }
 
