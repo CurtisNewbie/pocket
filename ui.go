@@ -73,7 +73,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 	fetchPage := func(p int) {
 		UIFetchNotes(pocket, p, lv.name.Text)
 	}
-	opt := NewOptionList().
+	opt := NewOptionList(nil).
 		AddItem("Create Item", "", 'c', func() {
 			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
 		}).
@@ -148,10 +148,20 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	var tmpName string = it.Name
 	var tmpDesc string = it.Desc
 	var tmpContent string = it.Content
+	changed := false
 
-	form.AddInputField("Name:", tmpName, 30, nil, func(t string) { tmpName = t })
-	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) { tmpDesc = t })
-	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) { tmpContent = t })
+	form.AddInputField("Name:", tmpName, 30, nil, func(t string) {
+		changed = true
+		tmpName = t
+	})
+	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) {
+		changed = true
+		tmpDesc = t
+	})
+	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) {
+		changed = true
+		tmpContent = t
+	})
 
 	confirm := func() {
 		ni := Note{
@@ -172,6 +182,10 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
+		if !changed {
+			closePopup()
+			return
+		}
 		PopConfirmDialog(pocket, closePopup, "Close Dialog?", 50, 15)
 	})
 	form.SetButtonsAlign(tview.AlignCenter)
@@ -248,7 +262,14 @@ type DetailPage struct {
 func NewDetailPage(pocket *Pocket) *DetailPage {
 	dp := new(DetailPage)
 	vw := NewDetailView(pocket)
-	options := NewOptionList().
+	delegatingInputCap := func(e *tcell.EventKey) (*tcell.EventKey, bool) {
+		if e.Rune() == 'h' {
+			pocket.Pages.SwitchToPage(PageList)
+			return nil, true
+		}
+		return e, false
+	}
+	options := NewOptionList(delegatingInputCap).
 		AddItem("Edit", "", 'e', func() {
 			PopEditNotePage(pocket, vw.Item)
 		}).
@@ -312,7 +333,7 @@ func NewContentPlane(options tview.Primitive, content tview.Primitive) *tview.Fl
 	return layout
 }
 
-func NewOptionList() *tview.List {
+func NewOptionList(delegatingInputCap func(event *tcell.EventKey) (*tcell.EventKey, bool)) *tview.List {
 	l := tview.NewList()
 	l.SetBorder(true).SetTitle(" Options ")
 	l.ShowSecondaryText(false)
@@ -324,6 +345,11 @@ func NewOptionList() *tview.List {
 		}
 		if event.Rune() == 'k' {
 			return tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone)
+		}
+		if delegatingInputCap != nil {
+			if ev, ok := delegatingInputCap(event); ok {
+				return ev
+			}
 		}
 		return event
 	})
@@ -698,7 +724,7 @@ func PopPasswordPage(pocket *Pocket, onConfirm func()) {
 
 	form.AddButton("Confirm", func() {
 		if err := ValidatePassword(tmppw); err != nil {
-			PopMsg(pocket, nil, err.Error())
+			resetPasswordField(err.Error())
 			return
 		}
 		InitPassword(tmppw)
