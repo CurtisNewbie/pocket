@@ -73,7 +73,17 @@ func NewListPage(pocket *Pocket) *ListPage {
 	fetchPage := func(p int) {
 		UIFetchNotes(pocket, p, lv.name.Text)
 	}
-	opt := NewOptionList(nil).
+	extendedCap := func(event *tcell.EventKey) (*tcell.EventKey, bool) {
+		if event.Key() == tcell.KeyESC {
+			if lv.name.Text != "" {
+				lv.name.SetText("")
+			}
+			fetchPage(pocket.ListPage.pageNum)
+			return nil, true
+		}
+		return nil, false
+	}
+	opt := NewOptionList(extendedCap).
 		AddItem("Create Item", "", 'c', func() {
 			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
 		}).
@@ -95,7 +105,9 @@ func NewListPage(pocket *Pocket) *ListPage {
 				fetchPage(pocket.ListPage.pageNum - 1)
 			}
 		}).
-		AddItem("Exit", "", 'q', func() { PopExitPage(pocket) })
+		AddItem("Exit", "", 'q', func() {
+			PopExitPage(pocket)
+		})
 
 	cp := NewContentPlane(opt, lv.flex)
 	lp.Options = opt
@@ -202,13 +214,23 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	}
 
 	form := NewForm()
+	changed := false
 	var tmpName string = ""
 	var tmpDesc string = ""
 	var tmpContent string = ""
 
-	form.AddInputField("Name:", tmpName, 30, nil, func(t string) { tmpName = t })
-	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) { tmpDesc = t })
-	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) { tmpContent = t })
+	form.AddInputField("Name:", tmpName, 30, nil, func(t string) {
+		tmpName = t
+		changed = true
+	})
+	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) {
+		tmpDesc = t
+		changed = true
+	})
+	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) {
+		tmpContent = t
+		changed = true
+	})
 
 	confirm := func() {
 		ctime := Now()
@@ -233,6 +255,10 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
+		if !changed {
+			closePopup()
+			return
+		}
 		PopConfirmDialog(pocket, closePopup, "Close Dialog?", 50, 15)
 	})
 	form.SetButtonsAlign(tview.AlignCenter)
@@ -262,18 +288,23 @@ type DetailPage struct {
 func NewDetailPage(pocket *Pocket) *DetailPage {
 	dp := new(DetailPage)
 	vw := NewDetailView(pocket)
-	delegatingInputCap := func(e *tcell.EventKey) (*tcell.EventKey, bool) {
+	extendedInputCap := func(e *tcell.EventKey) (*tcell.EventKey, bool) {
 		if e.Rune() == 'h' {
 			pocket.Pages.SwitchToPage(PageList)
 			return nil, true
 		}
-		return e, false
+		if e.Key() == tcell.KeyESC {
+			pocket.Pages.SwitchToPage(PageList)
+			return nil, true
+		}
+
+		return nil, false
 	}
-	options := NewOptionList(delegatingInputCap).
+	options := NewOptionList(extendedInputCap).
 		AddItem("Edit", "", 'e', func() {
 			PopEditNotePage(pocket, vw.Item)
 		}).
-		AddItem("Delete", "", 'D', func() {
+		AddItem("Delete", "", 'd', func() {
 			PopDeleteNotePage(pocket, vw.Item)
 		}).
 		AddItem("Mask/Unmask", "", 'm', vw.SwitchMasking).
@@ -333,7 +364,7 @@ func NewContentPlane(options tview.Primitive, content tview.Primitive) *tview.Fl
 	return layout
 }
 
-func NewOptionList(delegatingInputCap func(event *tcell.EventKey) (*tcell.EventKey, bool)) *tview.List {
+func NewOptionList(extendedCap func(event *tcell.EventKey) (*tcell.EventKey, bool)) *tview.List {
 	l := tview.NewList()
 	l.SetBorder(true).SetTitle(" Options ")
 	l.ShowSecondaryText(false)
@@ -346,8 +377,8 @@ func NewOptionList(delegatingInputCap func(event *tcell.EventKey) (*tcell.EventK
 		if event.Rune() == 'k' {
 			return tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone)
 		}
-		if delegatingInputCap != nil {
-			if ev, ok := delegatingInputCap(event); ok {
+		if extendedCap != nil {
+			if ev, ok := extendedCap(event); ok {
 				return ev
 			}
 		}
@@ -556,7 +587,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 			return nil
 		}
 
-		if evt.Key() == tcell.KeyEnter {
+		if evt.Key() == tcell.KeyEnter || evt.Rune() == 'l' {
 			j, ok := FindFocus(iv.content)
 			if ok {
 				itm := iv.content.GetItem(j)
