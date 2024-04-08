@@ -160,22 +160,19 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	var tmpName string = it.Name
 	var tmpDesc string = it.Desc
 	var tmpContent string = it.Content
-	changed := false
 
-	form.AddInputField("Name:", tmpName, 30, nil, func(t string) {
-		changed = true
-		tmpName = t
-	})
-	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) {
-		changed = true
-		tmpDesc = t
-	})
-	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) {
-		changed = true
-		tmpContent = t
-	})
+	form.AddInputField("Name:", tmpName, 30, nil, nil)
+	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, nil)
+	form.AddTextArea("Content:", tmpContent, 100, 20, 500, nil)
+
+	loadInput := func() {
+		tmpName = form.GetFormItemByLabel("Name:").(*tview.InputField).GetText()
+		tmpDesc = form.GetFormItemByLabel("Description:").(*tview.TextArea).GetText()
+		tmpContent = form.GetFormItemByLabel("Content:").(*tview.TextArea).GetText()
+	}
 
 	confirm := func() {
+		loadInput()
 		ni := Note{
 			Id:      it.Id,
 			Name:    tmpName,
@@ -194,7 +191,8 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
-		if !changed {
+		loadInput()
+		if tmpName == it.Name && tmpDesc == it.Desc && tmpContent == it.Content {
 			closePopup()
 			return
 		}
@@ -214,25 +212,22 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	}
 
 	form := NewForm()
-	changed := false
 	var tmpName string = ""
 	var tmpDesc string = ""
 	var tmpContent string = ""
 
-	form.AddInputField("Name:", tmpName, 30, nil, func(t string) {
-		tmpName = t
-		changed = true
-	})
-	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, func(t string) {
-		tmpDesc = t
-		changed = true
-	})
-	form.AddTextArea("Content:", tmpContent, 100, 20, 500, func(t string) {
-		tmpContent = t
-		changed = true
-	})
+	form.AddInputField("Name:", tmpName, 30, nil, nil)
+	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, nil)
+	form.AddTextArea("Content:", tmpContent, 100, 20, 500, nil)
+
+	loadInput := func() {
+		tmpName = form.GetFormItemByLabel("Name:").(*tview.InputField).GetText()
+		tmpDesc = form.GetFormItemByLabel("Description:").(*tview.TextArea).GetText()
+		tmpContent = form.GetFormItemByLabel("Content:").(*tview.TextArea).GetText()
+	}
 
 	confirm := func() {
+		loadInput()
 		ctime := Now()
 		note := Note{
 			Name:    tmpName,
@@ -255,7 +250,8 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
-		if !changed {
+		loadInput()
+		if tmpName == "" && tmpDesc == "" && tmpContent == "" {
 			closePopup()
 			return
 		}
@@ -647,22 +643,22 @@ func FindFocus(f *tview.Flex) (int, bool) {
 func NewForm() *tview.Form {
 	form := tview.NewForm()
 	form.SetFieldBackgroundColor(tcell.ColorNavy.TrueColor())
-	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 
-		// DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
+	// form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+	// 	// DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
 
-		// TODO: Not very intuitive
-		// Shift+Tab, always append at the end \t
-		// if (ev.Key() == tcell.KeyBacktab) || (ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModShift) {
-		// 	ta, _, ok := FindFocusedTextArea(form)
-		// 	if ok {
-		// 		ta.SetText(ta.GetText()+"\t", true)
-		// 	}
-		// 	return nil
-		// }
+	// 	// TODO: Not very intuitive
+	// 	// Shift+Tab, always append at the end \t
+	// 	if (ev.Key() == tcell.KeyBacktab) || (ev.Key() == tcell.KeyTAB && ev.Modifiers() == tcell.ModShift) {
+	// 		ta, _, ok := FindFocusedTextArea(form)
+	// 		if ok {
+	// 			ta.SetText(ta.GetText()+"\t", true)
+	// 		}
+	// 		return nil
+	// 	}
+	// 	return ev
+	// })
 
-		return ev
-	})
 	return form
 }
 
