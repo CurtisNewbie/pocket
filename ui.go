@@ -40,10 +40,6 @@ func (p *Pocket) RemovePage(page string) {
 	p.Pages.RemovePage(page)
 }
 
-func (p *Pocket) QueueCommand(f func()) {
-	p.QueueUpdateDraw(f)
-}
-
 type ListPage struct {
 	*tview.Flex
 	*ListView
@@ -407,8 +403,17 @@ func (d *DetailView) SwitchMasking() {
 	if d.Masked {
 		d.content.SetText(d.Item.Content)
 	} else {
-		s := strings.Repeat("*", len([]rune(d.Item.Content)))
-		d.content.SetText(s)
+		sb := strings.Builder{}
+		rr := []rune(d.Item.Content)
+		sb.Grow(len(rr))
+		for _, r := range rr {
+			if r == '\n' {
+				sb.WriteRune(r)
+			} else {
+				sb.WriteRune('*')
+			}
+		}
+		d.content.SetText(sb.String())
 	}
 	d.Masked = !d.Masked
 }
@@ -717,7 +722,7 @@ func UIFetchNotes(pocket *Pocket, page int, name string) {
 	go func() {
 		items, err := StFetchNotes(page, PageLimit, name)
 		if err == nil {
-			pocket.QueueCommand(func() {
+			pocket.QueueUpdateDraw(func() {
 				prev := pocket.ListPage.pageNum
 				if prev != page {
 					if page > prev && len(items) < 1 { // displyaing next page, but the page is empty
