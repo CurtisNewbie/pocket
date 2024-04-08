@@ -159,7 +159,7 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 
 	form.AddInputField("Name:", tmpName, 30, nil, nil)
 	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, nil)
-	form.AddTextArea("Content:", tmpContent, 100, 20, 500, nil)
+	form.AddTextArea("Content:", tmpContent, 100, 20, 10000, nil)
 
 	loadInput := func() {
 		tmpName = form.GetFormItemByLabel("Name:").(*tview.InputField).GetText()
@@ -214,7 +214,7 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 
 	form.AddInputField("Name:", tmpName, 30, nil, nil)
 	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, nil)
-	form.AddTextArea("Content:", tmpContent, 100, 20, 500, nil)
+	form.AddTextArea("Content:", tmpContent, 100, 20, 10000, nil)
 
 	loadInput := func() {
 		tmpName = form.GetFormItemByLabel("Name:").(*tview.InputField).GetText()
@@ -642,7 +642,7 @@ func NewForm() *tview.Form {
 	form.SetFieldBackgroundColor(tcell.ColorNavy.TrueColor())
 
 	// form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
-	// 	// DebugLog(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
+	// 	Debugf(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
 
 	// 	// TODO: Not very intuitive
 	// 	// Shift+Tab, always append at the end \t
