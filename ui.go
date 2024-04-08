@@ -66,22 +66,22 @@ func (l *ListPage) AddPage(delta int) int {
 func NewListPage(pocket *Pocket) *ListPage {
 	lp := new(ListPage)
 	lv := NewListView(pocket)
-	fetchPage := func(p int) {
-		UIFetchNotes(pocket, p, lv.name.Text)
-	}
+
 	extendedCap := func(event *tcell.EventKey) (*tcell.EventKey, bool) {
 		if event.Key() == tcell.KeyESC {
 			if lv.name.Text != "" {
 				lv.name.SetText("")
 			}
-			fetchPage(pocket.ListPage.pageNum)
+			UIFetchNotes(pocket, 0)
 			return nil, true
 		}
 		return nil, false
 	}
 	opt := NewOptionList(extendedCap).
 		AddItem("Create Item", "", 'c', func() {
-			PopCreateNotePage(pocket, func() { fetchPage(pocket.ListPage.pageNum) })
+			PopCreateNotePage(pocket, func() {
+				UIFetchNotes(pocket, 0)
+			})
 		}).
 		AddItem("Select Item", "", 'l', func() {
 			c := lv.content.GetItemCount()
@@ -94,11 +94,11 @@ func NewListPage(pocket *Pocket) *ListPage {
 		}).
 		AddItem("Next Page", "", 'n', func() {
 			lv.page.SetText(pocket.ListPage.GetPageStr())
-			fetchPage(pocket.ListPage.pageNum + 1)
+			UIFetchNotes(pocket, 1)
 		}).
 		AddItem("Prev Page", "", 'N', func() {
 			if pocket.ListPage.GetPage() > 1 {
-				fetchPage(pocket.ListPage.pageNum - 1)
+				UIFetchNotes(pocket, -1)
 			}
 		}).
 		AddItem("Exit", "", 'q', func() {
@@ -134,7 +134,7 @@ func PopEditSearchPage(pocket *Pocket) {
 			liv.name.SetText(tmpName)
 			closePopup()
 			if prevName != tmpName {
-				UIFetchNotes(pocket, 1, tmpName)
+				UIFetchNotes(pocket, 0)
 			}
 			return nil
 		}
@@ -281,11 +281,8 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 	dp := new(DetailPage)
 	vw := NewDetailView(pocket)
 	extendedInputCap := func(e *tcell.EventKey) (*tcell.EventKey, bool) {
-		if e.Rune() == 'h' {
-			pocket.Pages.SwitchToPage(PageList)
-			return nil, true
-		}
-		if e.Key() == tcell.KeyESC {
+		if e.Rune() == 'h' || e.Key() == tcell.KeyESC {
+			UIFetchNotes(pocket, 0)
 			pocket.Pages.SwitchToPage(PageList)
 			return nil, true
 		}
@@ -301,6 +298,7 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 		}).
 		AddItem("Mask/Unmask", "", 'm', vw.SwitchMasking).
 		AddItem("Exit", "", 'q', func() {
+			UIFetchNotes(pocket, 0)
 			pocket.Pages.SwitchToPage(PageList)
 		})
 
@@ -332,7 +330,7 @@ func NewApp() *Pocket {
 	// page to add password
 	PopPasswordPage(pocket, func() {
 		// fetch the first page
-		UIFetchNotes(pocket, 1, "")
+		UIFetchNotes(pocket, 0)
 	})
 
 	app.SetRoot(pages, true)
@@ -684,7 +682,7 @@ func PopDeleteNotePage(pocket *Pocket, it Note) {
 		UIDeleteNote(pocket, it, func(err error) {
 			pocket.ToPage(PageList)
 			if err == nil {
-				UIFetchNotes(pocket, pocket.ListPage.pageNum, pocket.ListPage.name.Text)
+				UIFetchNotes(pocket, 0)
 			}
 		})
 		close()
@@ -712,13 +710,19 @@ func UIEditNote(pocket *Pocket, note Note, callback func(err error)) {
 		callback(err)
 	}()
 }
+
 func UICreateNote(pocket *Pocket, note Note, callback func(note Note, err error)) {
 	go func() {
 		note, err := StCreateNote(note)
 		callback(note, err)
 	}()
 }
-func UIFetchNotes(pocket *Pocket, page int, name string) {
+
+func UIFetchNotes(pocket *Pocket, pageDelta int) {
+	name := pocket.ListPage.name.Text
+	page := pocket.ListPage.pageNum
+	page += pageDelta
+
 	go func() {
 		items, err := StFetchNotes(page, PageLimit, name)
 		if err == nil {
