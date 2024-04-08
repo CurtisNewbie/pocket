@@ -326,13 +326,7 @@ func NewApp() *Pocket {
 
 	pages.AddPage(PageDetail, detailPage, true, true)
 	pages.AddPage(PageList, listPage, true, true)
-
-	// page to add password
-	PopPasswordPage(pocket, func() {
-		// fetch the first page
-		UIFetchNotes(pocket, 0)
-	})
-
+	PopPasswordPage(pocket)
 	app.SetRoot(pages, true)
 
 	return pocket
@@ -745,52 +739,55 @@ func UIFetchNotes(pocket *Pocket, pageDelta int) {
 	}()
 }
 
-func PopPasswordPage(pocket *Pocket, onConfirm func()) {
+func PopPasswordPage(pocket *Pocket) {
 	form := NewForm()
 
 	var tmppw string = ""
 	form.AddPasswordField("Password (8-32 english characters [0-9a-zA-Z-_!.]):", tmppw, 32, '*',
 		func(t string) { tmppw = t })
 
+	ni := form.GetFormItem(0).(*tview.InputField)
 	resetPasswordField := func(msg string) {
-		ni := form.GetFormItem(0).(*tview.InputField)
 		ni.SetText("")
 		PopMsg(pocket, func() { pocket.SetFocus(ni) }, msg)
 	}
 
-	form.AddButton("Confirm", func() {
-		if err := ValidatePassword(tmppw); err != nil {
-			resetPasswordField(err.Error())
-			return
-		}
-		InitPassword(tmppw)
+	ni.SetInputCapture(func(e *tcell.EventKey) *tcell.EventKey {
 
-		{
+		if e.Key() == tcell.KeyEnter {
+			if err := ValidatePassword(tmppw); err != nil {
+				resetPasswordField(err.Error())
+				return nil
+			}
+			InitPassword(tmppw)
 			ok, err := StCheckPassword(tmppw)
 			if err != nil {
 				resetPasswordField(err.Error())
-				return
+				return nil
 			}
 			if !ok {
 				resetPasswordField("password incorrect")
-				return
+				return nil
 			}
 
 			if err := StInitSchema(); err != nil {
 				PopMsg(pocket, nil, err.Error())
-				return
+				return nil
 			}
+			pocket.RemovePage(PagePassword)
+			pocket.ToPage(PageList)
+			UIFetchNotes(pocket, 0)
+			return nil
 		}
 
-		pocket.RemovePage(PagePassword)
-		pocket.ToPage(PageList)
-		onConfirm()
+		return e
 	})
+
 	form.SetCancelFunc(pocket.Stop)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Enter Password ")
 
-	popup := createPopup(pocket.Pages, form, 15, 100)
+	popup := createPopup(pocket.Pages, form, 5, 90)
 	pocket.Pages.AddPage(PagePassword, popup, true, true)
 }
 
