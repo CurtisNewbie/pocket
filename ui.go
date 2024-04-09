@@ -125,7 +125,7 @@ func PopEditSearchPage(pocket *Pocket) {
 	var tmpName string = ""
 
 	form := NewForm()
-	form.AddInputField("Name:", tmpName, 60, nil, func(t string) { tmpName = t })
+	form.AddInputField("Match (supports AND/OR):", tmpName, 80, nil, func(t string) { tmpName = t })
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Search Parameters ")
@@ -141,7 +141,7 @@ func PopEditSearchPage(pocket *Pocket) {
 		return evt
 	})
 
-	popup := createPopup(pages, form, 5, 70)
+	popup := createPopup(pages, form, 5, 110)
 	pages.AddPage(PageSearch, popup, true, true)
 }
 
