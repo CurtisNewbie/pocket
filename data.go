@@ -107,15 +107,15 @@ func InitSchema() error {
 	return nil
 }
 
-func FetchNotes(page int, limit int, name string) ([]Note, error) {
+func FetchNotes(page int, limit int, kw string) ([]Note, error) {
 	t := GetDB().Table("pocket_note").
 		Select("rowid id, name, desc, content, ctime, utime").
 		Order("id DESC").
 		Limit(limit).
 		Offset((page - 1) * limit)
 
-	if name != "" {
-		t = t.Where("name MATCH ?", name)
+	if kw != "" {
+		t = t.Where("name MATCH ? OR desc MATCH ?", kw, kw)
 	}
 
 	var notes []Note
