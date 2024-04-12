@@ -16,7 +16,7 @@ var (
 	StEditNote      func(note Note) error                                  = UpdateNote
 	StCreateNote    func(note Note) (Note, error)                          = CreateNote
 	StFetchNotes    func(page int, limit int, name string) ([]Note, error) = FetchNotes
-	StCheckPassword func(pw string) (bool, error)                          = CheckPassword
+	StCheckPassword func() (bool, error)                                   = CheckPassword
 	StInitSchema    func() error                                           = InitSchema
 )
 
@@ -33,7 +33,7 @@ type Note struct {
 	Utime   ETime
 }
 
-func CheckPassword(pw string) (bool, error) {
+func CheckPassword() (bool, error) {
 	var n string
 	err := GetDB().Raw(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pocket_config'`).Scan(&n).Error
 	if err != nil {

@@ -75,6 +75,13 @@ func NewListPage(pocket *Pocket) *ListPage {
 			UIFetchNotes(pocket, 0)
 			return nil, true
 		}
+		if event.Rune() == 'l' || event.Key() == tcell.KeyRight {
+			c := lv.content.GetItemCount()
+			if c > 0 {
+				pocket.SetFocus(lv.content.GetItem(0))
+			}
+			return nil, true
+		}
 		return nil, false
 	}
 	opt := NewOptionList(extendedCap).
@@ -281,7 +288,7 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 	dp := new(DetailPage)
 	vw := NewDetailView(pocket)
 	extendedInputCap := func(e *tcell.EventKey) (*tcell.EventKey, bool) {
-		if e.Rune() == 'h' || e.Key() == tcell.KeyESC {
+		if e.Rune() == 'h' || e.Key() == tcell.KeyESC || e.Key() == tcell.KeyLeft {
 			UIFetchNotes(pocket, 0)
 			pocket.Pages.SwitchToPage(PageList)
 			return nil, true
@@ -569,7 +576,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 	iv.content.SetBorder(true).SetTitle(" Records ")
 
 	iv.content.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
-		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' || evt.Rune() == 'h' {
+		if evt.Key() == tcell.KeyESC || evt.Rune() == 'q' || evt.Rune() == 'h' || evt.Key() == tcell.KeyLeft {
 			pocket.SetFocus(pocket.ListPage.Options)
 			return nil
 		}
@@ -580,7 +587,7 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 			return nil
 		}
 
-		if evt.Key() == tcell.KeyEnter || evt.Rune() == 'l' {
+		if evt.Key() == tcell.KeyEnter || evt.Rune() == 'l' || evt.Key() == tcell.KeyRight {
 			j, ok := FindFocus(iv.content)
 			if ok {
 				itm := iv.content.GetItem(j)
@@ -592,17 +599,15 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 		}
 
 		r := evt.Rune()
-		switch r {
-		case 'j', 'k':
+		if r == 'j' || r == 'k' || evt.Key() == tcell.KeyUp || evt.Key() == tcell.KeyDown {
 			l := iv.content.GetItemCount()
 			i, ok := FindFocus(iv.content)
 			if ok {
-				switch r {
-				case 'j':
+				if r == 'j' || evt.Key() == tcell.KeyDown {
 					if i < l-1 {
 						pocket.SetFocus(iv.content.GetItem(i + 1))
 					}
-				case 'k':
+				} else if r == 'k' || evt.Key() == tcell.KeyUp {
 					if i > 0 {
 						pocket.SetFocus(iv.content.GetItem(i - 1))
 					}
@@ -760,7 +765,7 @@ func PopPasswordPage(pocket *Pocket) {
 				return nil
 			}
 			InitPassword(tmppw)
-			ok, err := StCheckPassword(tmppw)
+			ok, err := StCheckPassword()
 			if err != nil {
 				resetPasswordField(err.Error())
 				return nil
