@@ -346,7 +346,7 @@ func NewContentPlane(options tview.Primitive, content tview.Primitive) *tview.Fl
 
 	ver := tview.NewTextView()
 	ver.SetBorder(true)
-	ver.SetText(fmt.Sprintf("Pocket %v", Version))
+	ver.SetText(fmt.Sprintf("Pocket %v by yongjie.zhuang", Version))
 	ver.SetTextAlign(tview.AlignCenter)
 	layout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(ctnp, 0, 20, true).
