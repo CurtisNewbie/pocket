@@ -7,6 +7,7 @@ import (
 const (
 	SchemaVersion = "v0.0.0"
 	CKeyPwTest    = "PasswordTest"
+	PwTestLen     = 13
 )
 
 // Storage API Contract
@@ -55,7 +56,23 @@ func CheckPassword(pw string) (bool, error) {
 		Debugf("Check password failed, %v", err)
 		return false, nil
 	}
-	return val == CKeyPwTest, nil
+	return isValidPwCheckVal(val), nil
+}
+
+func isValidPwCheckVal(s string) bool {
+	if s == CKeyPwTest {
+		return true
+	}
+	rr := []rune(s)
+	if len(rr) != PwTestLen {
+		return false
+	}
+	for _, r := range rr {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func InitSchema() error {
@@ -81,7 +98,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to initialize schema, %v", err)
 	}
 
-	val, err := Encrypt(CKeyPwTest)
+	val, err := Encrypt(doRand(PwTestLen, digits))
 	if err != nil {
 		return err
 	}

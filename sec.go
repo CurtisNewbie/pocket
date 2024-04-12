@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	mr "math/rand"
 )
 
 var (
+	digits           = []rune("0123456789")
 	_password []byte = nil
 )
 
@@ -77,4 +79,13 @@ func Decrypt(s string) (string, error) {
 		return "", fmt.Errorf("failed to decrypt, %v", err)
 	}
 	return string(decrypted), nil
+}
+
+// generate randon str based on given length and given charset
+func doRand(n int, set []rune) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = set[mr.Intn(len(set))]
+	}
+	return string(b)
 }
