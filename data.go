@@ -142,7 +142,7 @@ func FetchNotes(page int, limit int, kw string) ([]Note, error) {
 	if notes == nil {
 		notes = make([]Note, 0)
 	}
-	Debugf("fetched notes: %#v", notes)
+	// Debugf("fetched notes: %#v", notes)
 	for i := range notes {
 		notes[i] = DecryptNote(notes[i])
 	}

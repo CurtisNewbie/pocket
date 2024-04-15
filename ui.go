@@ -63,6 +63,13 @@ func (l *ListPage) AddPage(delta int) int {
 	return l.pageNum
 }
 
+func (l *ListPage) FocusOne(pocket *Pocket) {
+	c := l.ListView.content.GetItemCount()
+	if c > 0 {
+		pocket.SetFocus(l.ListView.content.GetItem(0))
+	}
+}
+
 func NewListPage(pocket *Pocket) *ListPage {
 	lp := new(ListPage)
 	lv := NewListView(pocket)
@@ -76,10 +83,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 			return nil, true
 		}
 		if event.Rune() == 'l' || event.Key() == tcell.KeyRight {
-			c := lv.content.GetItemCount()
-			if c > 0 {
-				pocket.SetFocus(lv.content.GetItem(0))
-			}
+			lp.FocusOne(pocket)
 			return nil, true
 		}
 		return nil, false
@@ -91,10 +95,7 @@ func NewListPage(pocket *Pocket) *ListPage {
 			})
 		}).
 		AddItem("Select Item", "", 'l', func() {
-			c := lv.content.GetItemCount()
-			if c > 0 {
-				pocket.SetFocus(lv.content.GetItem(0))
-			}
+			lp.FocusOne(pocket)
 		}).
 		AddItem("Search Param", "", '/', func() {
 			PopEditSearchPage(pocket)
@@ -289,8 +290,8 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 	vw := NewDetailView(pocket)
 	extendedInputCap := func(e *tcell.EventKey) (*tcell.EventKey, bool) {
 		if e.Rune() == 'h' || e.Key() == tcell.KeyESC || e.Key() == tcell.KeyLeft {
-			UIFetchNotes(pocket, 0)
 			pocket.Pages.SwitchToPage(PageList)
+			UIFetchNotes(pocket, 0, func() { pocket.ListPage.FocusOne(pocket) })
 			return nil, true
 		}
 
@@ -305,8 +306,8 @@ func NewDetailPage(pocket *Pocket) *DetailPage {
 		}).
 		AddItem("Mask/Unmask", "", 'm', vw.SwitchMasking).
 		AddItem("Exit", "", 'q', func() {
-			UIFetchNotes(pocket, 0)
 			pocket.Pages.SwitchToPage(PageList)
+			UIFetchNotes(pocket, 0, func() { pocket.ListPage.FocusOne(pocket) })
 		})
 
 	p := NewContentPlane(options, vw.flex)
@@ -325,11 +326,11 @@ func NewApp() *Pocket {
 		Pages:       pages,
 	}
 
-	detailPage := NewDetailPage(pocket)
-	pocket.DetailPage = detailPage
-
 	listPage := NewListPage(pocket)
 	pocket.ListPage = listPage
+
+	detailPage := NewDetailPage(pocket)
+	pocket.DetailPage = detailPage
 
 	pages.AddPage(PageDetail, detailPage, true, true)
 	pages.AddPage(PageList, listPage, true, true)
@@ -717,7 +718,7 @@ func UICreateNote(pocket *Pocket, note Note, callback func(note Note, err error)
 	}()
 }
 
-func UIFetchNotes(pocket *Pocket, pageDelta int) {
+func UIFetchNotes(pocket *Pocket, pageDelta int, then ...func()) {
 	name := pocket.ListPage.name.Text
 	page := pocket.ListPage.pageNum
 	page += pageDelta
@@ -738,6 +739,10 @@ func UIFetchNotes(pocket *Pocket, pageDelta int) {
 				pocket.ListPage.ClearNotes()
 				for _, it := range items {
 					pocket.ListPage.AddNote(it)
+				}
+
+				for _, th := range then {
+					th()
 				}
 			})
 		}
