@@ -25,6 +25,10 @@ const (
 	PageConfirm  = "confirm"
 
 	PageLimit = 10
+
+	LabelName    = "Name:"
+	LabelDesc    = "Description:"
+	LabelContent = "Content:"
 )
 
 type Pocket struct {
@@ -142,7 +146,7 @@ func PopEditSearchPage(pocket *Pocket) {
 	prevName := liv.name.Text
 	var tmpName string = ""
 
-	form := NewForm()
+	form := NewForm(false)
 	form.AddInputField("Match (supports AND/OR):", tmpName, 80, nil, func(t string) { tmpName = t })
 	form.SetCancelFunc(closePopup)
 	form.SetButtonsAlign(tview.AlignCenter)
@@ -170,19 +174,56 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 		pocket.RemovePage(PageCreate)
 	}
 
-	form := NewForm()
+	form := NewForm(true)
 	var tmpName string = it.Name
 	var tmpDesc string = it.Desc
 	var tmpContent string = it.Content
 
-	form.AddInputField("Name:", tmpName, 30, nil, nil)
-	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, nil)
-	form.AddTextArea("Content:", tmpContent, 100, 20, 10000, nil)
+	form.AddInputField(LabelName, tmpName, 30, nil, nil)
+	form.AddTextArea(LabelDesc, tmpDesc, 100, 5, 250, nil)
+	form.AddTextArea(LabelContent, tmpContent, 100, 20, 10000, nil)
+
+	// this is so ugly :(, but it works
+	ni := form.GetFormItemByLabel(LabelName).(*tview.InputField)
+	ni.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			VimEdit(pocket, tmpName, func(s string) {
+				tmpName = s
+				ni.SetText(tmpName)
+			})
+			return nil
+		}
+		return event
+	})
+
+	di := form.GetFormItemByLabel(LabelDesc).(*tview.TextArea)
+	di.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			VimEdit(pocket, tmpDesc, func(s string) {
+				tmpDesc = s
+				di.SetText(tmpDesc, true)
+			})
+			return nil
+		}
+		return event
+	})
+
+	ci := form.GetFormItemByLabel(LabelContent).(*tview.TextArea)
+	ci.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			VimEdit(pocket, tmpContent, func(s string) {
+				tmpContent = s
+				ci.SetText(tmpContent, true)
+			})
+			return nil
+		}
+		return event
+	})
 
 	loadInput := func() {
-		tmpName = form.GetFormItemByLabel("Name:").(*tview.InputField).GetText()
-		tmpDesc = form.GetFormItemByLabel("Description:").(*tview.TextArea).GetText()
-		tmpContent = form.GetFormItemByLabel("Content:").(*tview.TextArea).GetText()
+		tmpName = ni.GetText()
+		tmpDesc = di.GetText()
+		tmpContent = ci.GetText()
 	}
 
 	confirm := func() {
@@ -202,12 +243,7 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 			pocket.RemovePage(PageEdit)
 		})
 	}
-	form.AddButton("Vim Edit Content", func() {
-		VimEdit(pocket, tmpContent, func(s string) {
-			tmpContent = s
-			form.GetFormItemByLabel("Content:").(*tview.TextArea).SetText(tmpContent, true)
-		})
-	})
+
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
@@ -219,7 +255,7 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 		PopConfirmDialog(pocket, closePopup, "Close Dialog?", 50, 15)
 	})
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBorder(true).SetTitle(" Edit Note ")
+	form.SetBorder(true).SetTitle(" Edit Note (vim-based) ")
 
 	popup := createPopup(pocket.Pages, form, 35, 100)
 	pocket.Pages.AddPage(PageEdit, popup, true, true)
@@ -231,19 +267,56 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 		pocket.RemovePage(PageCreate)
 	}
 
-	form := NewForm()
+	form := NewForm(true)
 	var tmpName string = ""
 	var tmpDesc string = ""
 	var tmpContent string = ""
 
-	form.AddInputField("Name:", tmpName, 30, nil, nil)
-	form.AddTextArea("Description:", tmpDesc, 100, 5, 250, nil)
-	form.AddTextArea("Content:", tmpContent, 100, 20, 10000, nil)
+	form.AddInputField(LabelName, tmpName, 30, nil, nil)
+	form.AddTextArea(LabelDesc, tmpDesc, 100, 5, 250, nil)
+	form.AddTextArea(LabelContent, tmpContent, 100, 20, 10000, nil)
+
+	// this is so ugly :(, but it works
+	ni := form.GetFormItemByLabel(LabelName).(*tview.InputField)
+	ni.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			VimEdit(pocket, tmpName, func(s string) {
+				tmpName = s
+				ni.SetText(tmpName)
+			})
+			return nil
+		}
+		return event
+	})
+
+	di := form.GetFormItemByLabel(LabelDesc).(*tview.TextArea)
+	di.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			VimEdit(pocket, tmpDesc, func(s string) {
+				tmpDesc = s
+				di.SetText(tmpDesc, true)
+			})
+			return nil
+		}
+		return event
+	})
+
+	ci := form.GetFormItemByLabel(LabelContent).(*tview.TextArea)
+	ci.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			VimEdit(pocket, tmpContent, func(s string) {
+				tmpContent = s
+				ci.SetText(tmpContent, true)
+			})
+			return nil
+		}
+		return event
+	})
 
 	loadInput := func() {
-		tmpName = form.GetFormItemByLabel("Name:").(*tview.InputField).GetText()
-		tmpDesc = form.GetFormItemByLabel("Description:").(*tview.TextArea).GetText()
-		tmpContent = form.GetFormItemByLabel("Content:").(*tview.TextArea).GetText()
+		tmpName = ni.GetText()
+		tmpDesc = di.GetText()
+		tmpContent = ci.GetText()
 	}
 
 	confirm := func() {
@@ -267,13 +340,7 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 			}
 		})
 	}
-	form.AddButton("Vim Edit Content", func() {
-		loadInput()
-		VimEdit(pocket, tmpContent, func(s string) {
-			tmpContent = s
-			form.GetFormItemByLabel("Content:").(*tview.TextArea).SetText(tmpContent, true)
-		})
-	})
+
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
@@ -285,7 +352,7 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 		PopConfirmDialog(pocket, closePopup, "Close Dialog?", 50, 15)
 	})
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBorder(true).SetTitle(" Create Note ")
+	form.SetBorder(true).SetTitle(" Create Note (vim-based) ")
 
 	popup := createPopup(pocket.Pages, form, 35, 120)
 	pocket.Pages.AddPage(PageCreate, popup, true, true)
@@ -671,9 +738,30 @@ func FindFocus(f *tview.Flex) (int, bool) {
 }
 
 // Form with grey background color, and only uses Shift+Tab to move cursor between inputs/buttons to support typing \t in textarea.
-func NewForm() *tview.Form {
+func NewForm(vimBased bool) *tview.Form {
 	form := tview.NewForm()
 	form.SetFieldBackgroundColor(tcell.ColorNavy.TrueColor())
+
+	if vimBased {
+		form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			Debugf(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
+
+			if ev.Key() == tcell.KeyTab || ev.Key() == tcell.KeyBacktab || ev.Key() == tcell.KeyEnter {
+				return ev
+			}
+
+			if ev.Rune() == 'j' || ev.Key() == tcell.KeyDown {
+				return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+			}
+			if ev.Rune() == 'k' || ev.Key() == tcell.KeyUp {
+				return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+			}
+			if ev.Rune() == 'q' {
+				return tcell.NewEventKey(tcell.KeyESC, 0, tcell.ModNone)
+			}
+			return nil
+		})
+	}
 
 	// form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 	// 	Debugf(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
@@ -704,7 +792,7 @@ func FindFocusedTextArea(form *tview.Form) (*tview.TextArea, int, bool) {
 }
 
 func PopDeleteNotePage(pocket *Pocket, it Note) {
-	form := NewForm()
+	form := NewForm(false)
 	close := func() { pocket.RemovePage(PageDelete) }
 	confirm := func() {
 		UIDeleteNote(pocket, it, func(err error) {
@@ -778,7 +866,7 @@ func UIFetchNotes(pocket *Pocket, pageDelta int, then ...func()) {
 }
 
 func PopPasswordPage(pocket *Pocket) {
-	form := NewForm()
+	form := NewForm(false)
 
 	var tmppw string = ""
 	form.AddPasswordField("Password (8-32 english characters [0-9a-zA-Z-_!.]):", tmppw, 32, '*',
@@ -852,7 +940,7 @@ func ValidatePassword(s string) error {
 }
 
 func PopMsg(pocket *Pocket, onClosed func(), pat string, args ...any) {
-	form := NewForm()
+	form := NewForm(false)
 	close := func() {
 		pocket.RemovePage(PageMsg)
 		if onClosed != nil {
@@ -874,7 +962,7 @@ func PopExitPage(pocket *Pocket) {
 }
 
 func PopConfirmDialog(pocket *Pocket, confirm func(), msg string, width int, height int) {
-	form := NewForm()
+	form := NewForm(false)
 	close := func() { pocket.RemovePage(PageConfirm) }
 	form.AddTextView("", msg, width, height-10, false, true)
 	if confirm == nil {
