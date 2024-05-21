@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -192,6 +194,48 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 			pocket.RemovePage(PageEdit)
 		})
 	}
+	form.AddButton("Vim Content", func() {
+		pocket.Suspend(func() {
+			dir := os.TempDir()
+			os.MkdirAll(dir, 0755)
+
+			f, err := os.CreateTemp(dir, "pocket-*") // 0600
+			if err != nil {
+				PopMsg(pocket, nil, "Failed to create temp file, %v", err)
+				return
+			}
+			defer f.Close()
+			defer os.Remove(f.Name())
+
+			if _, err := f.WriteString(tmpContent); err != nil {
+				PopMsg(pocket, nil, "Failed to write to temp file, %v", err)
+				return
+			}
+			cmd := exec.Command("vim", f.Name())
+
+			// for term control
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+
+			if err := cmd.Run(); err != nil {
+				PopMsg(pocket, nil, "Failed to launch vim, %v", err)
+				return
+			}
+
+			out, err := os.ReadFile(f.Name())
+			if err != nil {
+				PopMsg(pocket, nil, "Failed to read from temp file, %v", err)
+				return
+			}
+
+			if out != nil {
+				tmpContent = string(out)
+			} else {
+				tmpContent = ""
+			}
+			form.GetFormItemByLabel("Content:").(*tview.TextArea).SetText(tmpContent, true)
+		})
+	})
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
