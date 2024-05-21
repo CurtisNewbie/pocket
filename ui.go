@@ -746,7 +746,7 @@ func NewForm(vimBased bool) *tview.Form {
 		form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 			Debugf(" %d %d - %d\n", ev.Key(), ev.Rune(), ev.Modifiers())
 
-			if ev.Key() == tcell.KeyTab || ev.Key() == tcell.KeyBacktab || ev.Key() == tcell.KeyEnter {
+			if ev.Key() == tcell.KeyTab || ev.Key() == tcell.KeyBacktab || ev.Key() == tcell.KeyEnter || ev.Key() == tcell.KeyEsc {
 				return ev
 			}
 
