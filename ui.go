@@ -74,7 +74,15 @@ func (l *ListPage) FocusOne(pocket *Pocket) {
 
 func NewListPage(pocket *Pocket) *ListPage {
 	lp := new(ListPage)
-	lv := NewListView(pocket)
+	lv := NewListView(pocket, func(event *tcell.EventKey) (*tcell.EventKey, bool) {
+		if event.Rune() == 'c' {
+			PopCreateNotePage(pocket, func() {
+				UIFetchNotes(pocket, 0)
+			})
+			return nil, true
+		}
+		return nil, false
+	})
 
 	extendedCap := func(event *tcell.EventKey) (*tcell.EventKey, bool) {
 		if event.Key() == tcell.KeyESC {
@@ -194,45 +202,9 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 			pocket.RemovePage(PageEdit)
 		})
 	}
-	form.AddButton("Vim Content", func() {
-		pocket.Suspend(func() {
-			dir := os.TempDir()
-			os.MkdirAll(dir, 0755)
-
-			f, err := os.CreateTemp(dir, "pocket-*") // 0600
-			if err != nil {
-				PopMsg(pocket, nil, "Failed to create temp file, %v", err)
-				return
-			}
-			defer f.Close()
-			defer os.Remove(f.Name())
-
-			if _, err := f.WriteString(tmpContent); err != nil {
-				PopMsg(pocket, nil, "Failed to write to temp file, %v", err)
-				return
-			}
-			cmd := exec.Command("vim", f.Name())
-
-			// for term control
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-
-			if err := cmd.Run(); err != nil {
-				PopMsg(pocket, nil, "Failed to launch vim, %v", err)
-				return
-			}
-
-			out, err := os.ReadFile(f.Name())
-			if err != nil {
-				PopMsg(pocket, nil, "Failed to read from temp file, %v", err)
-				return
-			}
-
-			if out != nil {
-				tmpContent = string(out)
-			} else {
-				tmpContent = ""
-			}
+	form.AddButton("Vim Edit Content", func() {
+		VimEdit(pocket, tmpContent, func(s string) {
+			tmpContent = s
 			form.GetFormItemByLabel("Content:").(*tview.TextArea).SetText(tmpContent, true)
 		})
 	})
@@ -295,6 +267,13 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 			}
 		})
 	}
+	form.AddButton("Vim Edit Content", func() {
+		loadInput()
+		VimEdit(pocket, tmpContent, func(s string) {
+			tmpContent = s
+			form.GetFormItemByLabel("Content:").(*tview.TextArea).SetText(tmpContent, true)
+		})
+	})
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
@@ -587,7 +566,7 @@ func (l *ListView) AddNote(it Note) {
 	l.content.AddItem(lip, 6, 1, false)
 }
 
-func NewListView(pocket *Pocket) (iv *ListView) {
+func NewListView(pocket *Pocket, extendCap func(event *tcell.EventKey) (*tcell.EventKey, bool)) (iv *ListView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
 	iv = new(ListView)
@@ -661,6 +640,11 @@ func NewListView(pocket *Pocket) (iv *ListView) {
 				pocket.SetFocus(iv.content.GetItem(0))
 			}
 		}
+
+		if t, ok := extendCap(evt); ok {
+			return t
+		}
+
 		return evt
 	})
 
@@ -903,4 +887,46 @@ func PopConfirmDialog(pocket *Pocket, confirm func(), msg string, width int, hei
 	popup := createPopup(pocket.Pages, form, height, width)
 	pocket.Pages.AddPage(PageConfirm, popup, true, true)
 	pocket.SetFocus(form.GetButton(0))
+}
+
+func VimEdit(pocket *Pocket, content string, onClose func(s string)) {
+	pocket.Suspend(func() {
+		dir := os.TempDir()
+		os.MkdirAll(dir, 0755)
+
+		f, err := os.CreateTemp(dir, "pocket-*") // 0600
+		if err != nil {
+			PopMsg(pocket, nil, "Failed to create temp file, %v", err)
+			return
+		}
+		defer f.Close()
+		defer os.Remove(f.Name())
+
+		if _, err := f.WriteString(content); err != nil {
+			PopMsg(pocket, nil, "Failed to write to temp file, %v", err)
+			return
+		}
+		cmd := exec.Command("vim", f.Name())
+
+		// for term control
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+
+		if err := cmd.Run(); err != nil {
+			PopMsg(pocket, nil, "Failed to launch vim, %v", err)
+			return
+		}
+
+		out, err := os.ReadFile(f.Name())
+		if err != nil {
+			PopMsg(pocket, nil, "Failed to read from temp file, %v", err)
+			return
+		}
+
+		if out != nil {
+			onClose(string(out))
+		} else {
+			onClose("")
+		}
+	})
 }
