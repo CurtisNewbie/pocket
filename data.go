@@ -12,12 +12,12 @@ const (
 
 // Storage API Contract
 var (
-	StDeleteNote    func(note Note) error                                  = DeleteNote
-	StEditNote      func(note Note) error                                  = UpdateNote
-	StCreateNote    func(note Note) (Note, error)                          = CreateNote
-	StFetchNotes    func(page int, limit int, name string) ([]Note, error) = FetchNotes
-	StCheckPassword func() (bool, error)                                   = CheckPassword
-	StInitSchema    func() error                                           = InitSchema
+	StDeleteNote    func(note Note) error                                       = DeleteNote
+	StEditNote      func(note Note) error                                       = UpdateNote
+	StCreateNote    func(note Note) (Note, error)                               = CreateNote
+	StFetchNotes    func(page int, limit int, name string) (int, []Note, error) = FetchNotes
+	StCheckPassword func() (bool, error)                                        = CheckPassword
+	StInitSchema    func() error                                                = InitSchema
 )
 
 var (
@@ -124,8 +124,21 @@ func InitSchema() error {
 	return nil
 }
 
-func FetchNotes(page int, limit int, kw string) ([]Note, error) {
+func FetchNotes(page int, limit int, kw string) (int, []Note, error) {
 	t := GetDB().Table("pocket_note").
+		Select(`count(*)`)
+	if kw != "" {
+		t = t.Where("name MATCH ? OR desc MATCH ?", kw, kw)
+	}
+	var total int
+	if err := t.Scan(&total).Error; err != nil {
+		return 0, nil, fmt.Errorf("failed to query notes, %v", err)
+	}
+	if total < 1 {
+		return total, []Note{}, nil
+	}
+
+	t = GetDB().Table("pocket_note").
 		Select("rowid id, name, desc, content, ctime, utime").
 		Order("id DESC").
 		Limit(limit).
@@ -137,7 +150,7 @@ func FetchNotes(page int, limit int, kw string) ([]Note, error) {
 
 	var notes []Note
 	if err := t.Scan(&notes).Error; err != nil {
-		return nil, fmt.Errorf("failed to query notes, %v", err)
+		return 0, nil, fmt.Errorf("failed to query notes, %v", err)
 	}
 	if notes == nil {
 		notes = make([]Note, 0)
@@ -146,7 +159,7 @@ func FetchNotes(page int, limit int, kw string) ([]Note, error) {
 	for i := range notes {
 		notes[i] = DecryptNote(notes[i])
 	}
-	return notes, nil
+	return total, notes, nil
 }
 
 func CreateNote(n Note) (Note, error) {

@@ -24,11 +24,19 @@ const (
 	PageExit     = "exit"
 	PageConfirm  = "confirm"
 
-	PageLimit = 10
+	PageLimit = 5
 
 	LabelName    = "Name:"
 	LabelDesc    = "Description:"
 	LabelContent = "Content:"
+)
+
+var (
+	KeyDownEvt    = tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
+	KeyUpEvt      = tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone)
+	KeyTabEvt     = tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+	KeyBackTabEvt = tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+	KeyEscEvt     = tcell.NewEventKey(tcell.KeyESC, 0, tcell.ModNone)
 )
 
 type Pocket struct {
@@ -78,13 +86,22 @@ func (l *ListPage) FocusOne(pocket *Pocket) {
 
 func NewListPage(pocket *Pocket) *ListPage {
 	lp := new(ListPage)
-	lv := NewListView(pocket, func(event *tcell.EventKey) (*tcell.EventKey, bool) {
+	lv := NewListView(pocket, func(lv *ListView, event *tcell.EventKey) (*tcell.EventKey, bool) {
 		if event.Rune() == 'c' {
-			PopCreateNotePage(pocket, func() {
-				UIFetchNotes(pocket, 0)
-			})
+			PopCreateNotePage(pocket, func() { UIFetchNotes(pocket, 0) })
 			return nil, true
 		}
+
+		if event.Rune() == 'n' {
+			UIFetchNotes(pocket, 1, func() { lp.FocusOne(pocket) })
+			return nil, true
+		}
+
+		if event.Rune() == 'N' && pocket.ListPage.GetPage() > 1 {
+			UIFetchNotes(pocket, -1, func() { lp.FocusOne(pocket) })
+			return nil, true
+		}
+
 		return nil, false
 	})
 
@@ -115,7 +132,6 @@ func NewListPage(pocket *Pocket) *ListPage {
 			PopEditSearchPage(pocket)
 		}).
 		AddItem("Next Page", "", 'n', func() {
-			lv.page.SetText(pocket.ListPage.GetPageStr())
 			UIFetchNotes(pocket, 1)
 		}).
 		AddItem("Prev Page", "", 'N', func() {
@@ -163,7 +179,7 @@ func PopEditSearchPage(pocket *Pocket) {
 		return evt
 	})
 
-	popup := createPopup(pages, form, 5, 110)
+	popup := createPopup(form, 5, 110)
 	pages.AddPage(PageSearch, popup, true, true)
 }
 
@@ -257,7 +273,7 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Edit Note (vim-based) ")
 
-	popup := createPopup(pocket.Pages, form, 35, 100)
+	popup := createPopup(form, 35, 100)
 	pocket.Pages.AddPage(PageEdit, popup, true, true)
 }
 
@@ -354,11 +370,11 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Create Note (vim-based) ")
 
-	popup := createPopup(pocket.Pages, form, 35, 120)
+	popup := createPopup(form, 35, 120)
 	pocket.Pages.AddPage(PageCreate, popup, true, true)
 }
 
-func createPopup(pages *tview.Pages, form tview.Primitive, height int, width int) tview.Primitive {
+func createPopup(form tview.Primitive, height int, width int) tview.Primitive {
 	modal := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
@@ -454,15 +470,13 @@ func NewOptionList(extendedCap func(event *tcell.EventKey) (*tcell.EventKey, boo
 	// capture hjkl
 	l.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'j' {
-			return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
+			return KeyDownEvt
 		}
 		if event.Rune() == 'k' {
-			return tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone)
+			return KeyUpEvt
 		}
-		if extendedCap != nil {
-			if ev, ok := extendedCap(event); ok {
-				return ev
-			}
+		if ev, ok := extendedCap(event); ok {
+			return ev
 		}
 		return event
 	})
@@ -587,6 +601,7 @@ type ListView struct {
 	bar     *tview.TextView  // top bar
 	name    *tview.TableCell // searched name
 	page    *tview.TableCell // at page (1-based)
+	total   *tview.TableCell // total
 	content *tview.Flex      // content of the list view, contains N note items
 
 	pageNum int
@@ -633,7 +648,7 @@ func (l *ListView) AddNote(it Note) {
 	l.content.AddItem(lip, 6, 1, false)
 }
 
-func NewListView(pocket *Pocket, extendCap func(event *tcell.EventKey) (*tcell.EventKey, bool)) (iv *ListView) {
+func NewListView(pocket *Pocket, extendCap func(lv *ListView, event *tcell.EventKey) (*tcell.EventKey, bool)) (iv *ListView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
 	iv = new(ListView)
@@ -656,6 +671,11 @@ func NewListView(pocket *Pocket, extendCap func(event *tcell.EventKey) (*tcell.E
 	tb.GetCell(1, 1).SetAlign(tview.AlignRight)
 	iv.page = tview.NewTableCell("1").SetTextColor(tview.Styles.SecondaryTextColor)
 	tb.SetCell(1, 2, iv.page)
+
+	tb.SetCellSimple(2, 1, "Total:")
+	tb.GetCell(2, 1).SetAlign(tview.AlignRight)
+	iv.total = tview.NewTableCell("0").SetTextColor(tview.Styles.SecondaryTextColor)
+	tb.SetCell(2, 2, iv.total)
 
 	infp := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
@@ -706,9 +726,10 @@ func NewListView(pocket *Pocket, extendCap func(event *tcell.EventKey) (*tcell.E
 			} else if l > 0 {
 				pocket.SetFocus(iv.content.GetItem(0))
 			}
+			return nil
 		}
 
-		if t, ok := extendCap(evt); ok {
+		if t, ok := extendCap(iv, evt); ok {
 			return t
 		}
 
@@ -751,13 +772,13 @@ func NewForm(vimBased bool) *tview.Form {
 			}
 
 			if ev.Rune() == 'j' || ev.Key() == tcell.KeyDown {
-				return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+				return KeyTabEvt
 			}
 			if ev.Rune() == 'k' || ev.Key() == tcell.KeyUp {
-				return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+				return KeyBackTabEvt
 			}
 			if ev.Rune() == 'q' {
-				return tcell.NewEventKey(tcell.KeyESC, 0, tcell.ModNone)
+				return KeyEscEvt
 			}
 			return nil
 		})
@@ -809,7 +830,7 @@ func PopDeleteNotePage(pocket *Pocket, it Note) {
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Delete Note ")
 
-	popup := createPopup(pocket.Pages, form, 15, 40)
+	popup := createPopup(form, 15, 40)
 	pocket.Pages.AddPage(PageDelete, popup, true, true)
 }
 
@@ -840,9 +861,11 @@ func UIFetchNotes(pocket *Pocket, pageDelta int, then ...func()) {
 	page += pageDelta
 
 	go func() {
-		items, err := StFetchNotes(page, PageLimit, name)
+		total, items, err := StFetchNotes(page, PageLimit, name)
 		if err == nil {
 			pocket.QueueUpdateDraw(func() {
+				pocket.ListPage.total.SetText(cast.ToString(total))
+
 				prev := pocket.ListPage.pageNum
 				if prev != page {
 					if page > prev && len(items) < 1 { // displyaing next page, but the page is empty
@@ -913,7 +936,7 @@ func PopPasswordPage(pocket *Pocket) {
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Enter Password ")
 
-	popup := createPopup(pocket.Pages, form, 5, 90)
+	popup := createPopup(form, 5, 90)
 	pocket.Pages.AddPage(PagePassword, popup, true, true)
 }
 
@@ -952,7 +975,7 @@ func PopMsg(pocket *Pocket, onClosed func(), pat string, args ...any) {
 	form.SetCancelFunc(close)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Message ")
-	popup := createPopup(pocket.Pages, form, 15, 50)
+	popup := createPopup(form, 15, 50)
 	pocket.Pages.AddPage(PageMsg, popup, true, true)
 	pocket.SetFocus(form.GetButton(0))
 }
@@ -972,7 +995,7 @@ func PopConfirmDialog(pocket *Pocket, confirm func(), msg string, width int, hei
 	form.SetCancelFunc(close)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBorder(true).SetTitle(" Message ")
-	popup := createPopup(pocket.Pages, form, height, width)
+	popup := createPopup(form, height, width)
 	pocket.Pages.AddPage(PageConfirm, popup, true, true)
 	pocket.SetFocus(form.GetButton(0))
 }
