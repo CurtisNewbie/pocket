@@ -191,64 +191,35 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	}
 
 	form := NewForm(true)
-	var tmpName string = it.Name
-	var tmpDesc string = it.Desc
-	var tmpContent string = it.Content
+	form.AddTextArea(LabelName, it.Name, 100, 2, 30, nil)
+	form.AddTextArea(LabelDesc, it.Desc, 100, 5, 250, nil)
+	form.AddTextArea(LabelContent, it.Content, 100, 20, 10000, nil)
 
-	form.AddInputField(LabelName, tmpName, 30, nil, nil)
-	form.AddTextArea(LabelDesc, tmpDesc, 100, 5, 250, nil)
-	form.AddTextArea(LabelContent, tmpContent, 100, 20, 10000, nil)
-
-	// this is so ugly :(, but it works
-	ni := form.GetFormItemByLabel(LabelName).(*tview.InputField)
-	ni.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			VimEdit(pocket, tmpName, func(s string) {
-				tmpName = s
-				ni.SetText(tmpName)
-			})
-			return nil
+	newInputCap := func(t *tview.TextArea) func(event *tcell.EventKey) *tcell.EventKey {
+		return func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyEnter {
+				VimEdit(pocket, t.GetText(), func(s string) { t.SetText(strings.TrimSpace(s), true) })
+				return nil
+			}
+			return event
 		}
-		return event
-	})
-
-	di := form.GetFormItemByLabel(LabelDesc).(*tview.TextArea)
-	di.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			VimEdit(pocket, tmpDesc, func(s string) {
-				tmpDesc = s
-				di.SetText(tmpDesc, true)
-			})
-			return nil
-		}
-		return event
-	})
-
-	ci := form.GetFormItemByLabel(LabelContent).(*tview.TextArea)
-	ci.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			VimEdit(pocket, tmpContent, func(s string) {
-				tmpContent = s
-				ci.SetText(tmpContent, true)
-			})
-			return nil
-		}
-		return event
-	})
-
-	loadInput := func() {
-		tmpName = ni.GetText()
-		tmpDesc = di.GetText()
-		tmpContent = ci.GetText()
 	}
 
+	// this is so ugly :(, but it works
+	ni := form.GetFormItemByLabel(LabelName).(*tview.TextArea)
+	di := form.GetFormItemByLabel(LabelDesc).(*tview.TextArea)
+	ci := form.GetFormItemByLabel(LabelContent).(*tview.TextArea)
+
+	ni.SetInputCapture(newInputCap(ni))
+	di.SetInputCapture(newInputCap(di))
+	ci.SetInputCapture(newInputCap(ci))
+
 	confirm := func() {
-		loadInput()
 		ni := Note{
 			Id:      it.Id,
-			Name:    tmpName,
-			Desc:    tmpDesc,
-			Content: tmpContent,
+			Name:    ni.GetText(),
+			Desc:    di.GetText(),
+			Content: ci.GetText(),
 			Ctime:   it.Ctime,
 			Utime:   Now(),
 		}
@@ -263,8 +234,7 @@ func PopEditNotePage(pocket *Pocket, it Note) {
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
-		loadInput()
-		if tmpName == it.Name && tmpDesc == it.Desc && tmpContent == it.Content {
+		if ni.GetText() == it.Name && di.GetText() == it.Desc && ci.GetText() == it.Content {
 			closePopup()
 			return
 		}
@@ -284,64 +254,35 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	}
 
 	form := NewForm(true)
-	var tmpName string = ""
-	var tmpDesc string = ""
-	var tmpContent string = ""
+	form.AddTextArea(LabelName, "", 100, 2, 30, nil)
+	form.AddTextArea(LabelDesc, "", 100, 5, 250, nil)
+	form.AddTextArea(LabelContent, "", 100, 20, 10000, nil)
 
-	form.AddInputField(LabelName, tmpName, 30, nil, nil)
-	form.AddTextArea(LabelDesc, tmpDesc, 100, 5, 250, nil)
-	form.AddTextArea(LabelContent, tmpContent, 100, 20, 10000, nil)
-
-	// this is so ugly :(, but it works
-	ni := form.GetFormItemByLabel(LabelName).(*tview.InputField)
-	ni.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			VimEdit(pocket, tmpName, func(s string) {
-				tmpName = s
-				ni.SetText(tmpName)
-			})
-			return nil
+	newInputCap := func(t *tview.TextArea) func(event *tcell.EventKey) *tcell.EventKey {
+		return func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyEnter {
+				VimEdit(pocket, t.GetText(), func(s string) { t.SetText(strings.TrimSpace(s), true) })
+				return nil
+			}
+			return event
 		}
-		return event
-	})
-
-	di := form.GetFormItemByLabel(LabelDesc).(*tview.TextArea)
-	di.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			VimEdit(pocket, tmpDesc, func(s string) {
-				tmpDesc = s
-				di.SetText(tmpDesc, true)
-			})
-			return nil
-		}
-		return event
-	})
-
-	ci := form.GetFormItemByLabel(LabelContent).(*tview.TextArea)
-	ci.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			VimEdit(pocket, tmpContent, func(s string) {
-				tmpContent = s
-				ci.SetText(tmpContent, true)
-			})
-			return nil
-		}
-		return event
-	})
-
-	loadInput := func() {
-		tmpName = ni.GetText()
-		tmpDesc = di.GetText()
-		tmpContent = ci.GetText()
 	}
 
+	// this is so ugly :(, but it works
+	ni := form.GetFormItemByLabel(LabelName).(*tview.TextArea)
+	di := form.GetFormItemByLabel(LabelDesc).(*tview.TextArea)
+	ci := form.GetFormItemByLabel(LabelContent).(*tview.TextArea)
+
+	ni.SetInputCapture(newInputCap(ni))
+	di.SetInputCapture(newInputCap(di))
+	ci.SetInputCapture(newInputCap(ci))
+
 	confirm := func() {
-		loadInput()
 		ctime := Now()
 		note := Note{
-			Name:    tmpName,
-			Desc:    tmpDesc,
-			Content: tmpContent,
+			Name:    ni.GetText(),
+			Desc:    di.GetText(),
+			Content: ci.GetText(),
 			Ctime:   ctime,
 			Utime:   ctime,
 		}
@@ -360,8 +301,7 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	form.AddButton("Confirm", confirm)
 	form.AddButton("Close", closePopup)
 	form.SetCancelFunc(func() {
-		loadInput()
-		if tmpName == "" && tmpDesc == "" && tmpContent == "" {
+		if ni.GetText() == "" && di.GetText() == "" && ci.GetText() == "" {
 			closePopup()
 			return
 		}
