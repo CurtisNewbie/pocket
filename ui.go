@@ -102,6 +102,11 @@ func NewListPage(pocket *Pocket) *ListPage {
 			return nil, true
 		}
 
+		if event.Rune() == '/' {
+			PopEditSearchPage(pocket)
+			return nil, true
+		}
+
 		return nil, false
 	})
 
@@ -170,6 +175,8 @@ func PopEditSearchPage(pocket *Pocket) {
 	form.SetInputCapture(func(evt *tcell.EventKey) *tcell.EventKey {
 		if evt.Key() == tcell.KeyEnter {
 			liv.name.SetText(tmpName)
+			liv.pageNum = 1
+			liv.page.SetText("1")
 			closePopup()
 			if prevName != tmpName {
 				UIFetchNotes(pocket, 0)
