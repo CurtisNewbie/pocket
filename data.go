@@ -18,6 +18,11 @@ var (
 	StFetchNotes    func(page int, limit int, name string) (int, []Note, error) = FetchNotes
 	StCheckPassword func() (bool, error)                                        = CheckPassword
 	StInitSchema    func() error                                                = InitSchema
+
+	StCreateTotpEntry  func(e TotpEntry) (TotpEntry, error) = CreateTotpEntry
+	StFetchTotpEntries func() ([]TotpEntry, error)          = FetchTotpEntries
+	StUpdateTotpRemark func(e TotpEntry) error              = UpdateTotpRemark
+	StDeleteTotpEntry  func(e TotpEntry) error              = DeleteTotpEntry
 )
 
 var (
@@ -31,6 +36,19 @@ type Note struct {
 	Content string
 	Ctime   ETime
 	Utime   ETime
+}
+
+type TotpEntry struct {
+	Id        int
+	Issuer    string
+	Account   string
+	Remark    string
+	Secret    string
+	Digits    int
+	Period    int
+	Algorithm string
+	Ctime     ETime
+	Utime     ETime
 }
 
 func CheckPassword() (bool, error) {
@@ -76,10 +94,31 @@ func isValidPwCheckVal(s string) bool {
 }
 
 func InitSchema() error {
+	if err := createSchema(); err != nil {
+		return err
+	}
+
 	if !_initSchemaFlag {
 		return nil
 	}
 
+	val, err := Encrypt(doRand(PwTestLen, digits))
+	if err != nil {
+		return err
+	}
+
+	err = GetDB().Exec(`INSERT INTO pocket_config (config_key, config_value) VALUES (?,?)`, CKeyPwTest, val).Error
+	if err != nil {
+		return fmt.Errorf("failed to init pocket_config record, %v", err)
+	}
+	_initSchemaFlag = false
+
+	return nil
+}
+
+// createSchema creates every table idempotently, so it runs on each launch and
+// upgrades databases created by older versions.
+func createSchema() error {
 	err := GetDB().Exec(`
 		CREATE TABLE IF NOT EXISTS pocket_config (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,21 +137,29 @@ func InitSchema() error {
 		return fmt.Errorf("failed to initialize schema, %v", err)
 	}
 
-	val, err := Encrypt(doRand(PwTestLen, digits))
-	if err != nil {
-		return err
-	}
-
-	err = GetDB().Exec(`INSERT INTO pocket_config (config_key, config_value) VALUES (?,?)`, CKeyPwTest, val).Error
-	if err != nil {
-		return fmt.Errorf("failed to init pocket_config record, %v", err)
-	}
-
 	err = GetDB().Exec(`
 		CREATE VIRTUAL TABLE IF NOT EXISTS pocket_note USING fts4 (
 			name TEXT NOT NULL,
 			desc TEXT NOT NULL,
 			content TEXT NOT NULL,
+			ctime DATETIME NOT NULL,
+			utime DATETIME NOT NULL
+		)
+	`).Error
+	if err != nil {
+		return fmt.Errorf("failed to initialize schema, %v", err)
+	}
+
+	err = GetDB().Exec(`
+		CREATE TABLE IF NOT EXISTS pocket_totp (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			issuer TEXT NOT NULL,
+			account TEXT NOT NULL,
+			remark TEXT NOT NULL DEFAULT '',
+			secret TEXT NOT NULL,
+			digits INTEGER NOT NULL DEFAULT 6,
+			period INTEGER NOT NULL DEFAULT 30,
+			algorithm TEXT NOT NULL DEFAULT 'SHA1',
 			ctime DATETIME NOT NULL,
 			utime DATETIME NOT NULL
 		)
@@ -211,6 +258,77 @@ func DeleteNote(note Note) error {
 	err := GetDB().Exec(`DELETE FROM pocket_note WHERE rowid = ?`, note.Id).Error
 	if err != nil {
 		return fmt.Errorf("failed to delete pocket_note, %v", err)
+	}
+	return nil
+}
+
+func DeleteTotpEntry(e TotpEntry) error {
+	err := GetDB().Exec(`DELETE FROM pocket_totp WHERE id = ?`, e.Id).Error
+	if err != nil {
+		return fmt.Errorf("db-delete-failed, failed to delete totp entry, %v", err)
+	}
+	return nil
+}
+
+func CreateTotpEntry(e TotpEntry) (TotpEntry, error) {
+	secret, err := Encrypt(e.Secret)
+	if err != nil {
+		return TotpEntry{}, fmt.Errorf("db-write-failed, failed to encrypt totp secret, %v", err)
+	}
+
+	err = GetDB().Exec(`
+	INSERT INTO pocket_totp (issuer, account, remark, secret, digits, period, algorithm, ctime, utime)
+	VALUES (?,?,?,?,?,?,?,?,?)
+	`, e.Issuer, e.Account, e.Remark, secret, e.Digits, e.Period, e.Algorithm, e.Ctime, e.Utime).Error
+	if err != nil {
+		return TotpEntry{}, fmt.Errorf("db-write-failed, failed to save totp entry, %v", err)
+	}
+
+	var id int
+	err = GetDB().Raw(`SELECT last_insert_rowid()`).Scan(&id).Error
+	if err != nil {
+		return TotpEntry{}, fmt.Errorf("db-read-failed, failed to find id of newly saved totp entry, %v", err)
+	}
+
+	e.Id = id
+	return e, nil
+}
+
+// FetchTotpEntries returns entries ordered by creation time descending, with the
+// row id as the tie-breaker. The secret is decrypted before it is returned.
+func FetchTotpEntries() ([]TotpEntry, error) {
+	var entries []TotpEntry
+	err := GetDB().Table("pocket_totp").
+		Select("id, issuer, account, remark, secret, digits, period, algorithm, ctime, utime").
+		Order("ctime DESC, id DESC").
+		Scan(&entries).Error
+	if err != nil {
+		return nil, fmt.Errorf("db-read-failed, failed to fetch totp entries, %v", err)
+	}
+	if entries == nil {
+		entries = make([]TotpEntry, 0)
+	}
+	for i := range entries {
+		secret, err := Decrypt(entries[i].Secret)
+		if err != nil {
+			// Keep the row in the list; an empty secret tells code generation
+			// that this entry's secret is undecryptable.
+			entries[i].Secret = ""
+			continue
+		}
+		entries[i].Secret = secret
+	}
+	return entries, nil
+}
+
+func UpdateTotpRemark(e TotpEntry) error {
+	err := GetDB().Exec(`
+	UPDATE pocket_totp
+	SET remark = ?, utime = ?
+	WHERE id = ?
+	`, e.Remark, e.Utime, e.Id).Error
+	if err != nil {
+		return fmt.Errorf("db-write-failed, failed to update totp remark, %v", err)
 	}
 	return nil
 }

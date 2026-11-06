@@ -4,10 +4,10 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A QR image on the clipboard adds a TOTP entry through the same preview as text.
-- [ ] An image wins when the clipboard carries both an image and text.
-- [ ] An empty clipboard, a clipboard with neither image nor otpauth text, an image with no QR code, and a QR code that is not a TOTP URI each produce their message and save nothing.
-- [ ] The screenshot is never written to disk.
-- [ ] QR decoding is tested by encoding a URI to a PNG and decoding it back.
+- [x] A QR image on the clipboard adds a TOTP entry through the same preview as text.
+- [x] An image wins when the clipboard carries both an image and text.
+- [x] An empty clipboard, a clipboard with neither image nor otpauth text, an image with no QR code, and a QR code that is not a TOTP URI each produce their message and save nothing.
+- [x] The screenshot is never written to disk.
+- [x] QR decoding is tested by encoding a URI to a PNG and decoding it back.

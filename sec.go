@@ -60,7 +60,10 @@ func Decrypt0(s string) string {
 }
 
 func Decrypt(s string) (string, error) {
-	dec, _ := hex.DecodeString(s)
+	dec, err := hex.DecodeString(s)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt, %v", err)
+	}
 
 	aesCipher, err := aes.NewCipher(_password)
 	if err != nil {
@@ -70,6 +73,10 @@ func Decrypt(s string) (string, error) {
 	gcm, err := cipher.NewGCM(aesCipher)
 	if err != nil {
 		return "", fmt.Errorf("failed to create GCM, %v", err)
+	}
+
+	if len(dec) < gcm.NonceSize() {
+		return "", fmt.Errorf("failed to decrypt, ciphertext too short")
 	}
 
 	nonce := dec[:gcm.NonceSize()]

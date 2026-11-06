@@ -4,11 +4,11 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The URI key shows the full otpauth URI in a read-only field, and Enter or y copies it.
-- [ ] A URI built from an entry with custom parameters round-trips through the parser unchanged.
-- [ ] The export key opens a path form that warns the PNG holds the secret in plaintext and defaults to the export directory under the user's home, created when absent.
-- [ ] An existing target file produces the collision message and writes nothing; a new path writes a PNG.
-- [ ] The written PNG decodes back to the same otpauth URI.
-- [ ] Tests cover the URI build round-trip and the encode and decode round-trip.
+- [x] The URI key shows the full otpauth URI in a read-only field, and Enter or y copies it.
+- [x] A URI built from an entry with custom parameters round-trips through the parser unchanged.
+- [x] The export key opens a path form that warns the PNG holds the secret in plaintext and defaults to the export directory under the user's home, created when absent.
+- [x] An existing target file produces the collision message and writes nothing; a new path writes a PNG.
+- [x] The written PNG decodes back to the same otpauth URI.
+- [x] Tests cover the URI build round-trip and the encode and decode round-trip.

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -13,16 +15,24 @@ import (
 )
 
 const (
-	PagePassword = "delete"
-	PageList     = "list"
-	PageDetail   = "detail"
-	PageSearch   = "search"
-	PageCreate   = "create"
-	PageEdit     = "edit"
-	PageDelete   = "delete"
-	PageMsg      = "message"
-	PageExit     = "exit"
-	PageConfirm  = "confirm"
+	PagePassword      = "delete"
+	PageList          = "list"
+	PageDetail        = "detail"
+	PageSearch        = "search"
+	PageCreate        = "create"
+	PageEdit          = "edit"
+	PageDelete        = "delete"
+	PageMsg           = "message"
+	PageExit          = "exit"
+	PageConfirm       = "confirm"
+	PageAuthenticator = "authenticator"
+
+	PageAuthenticatorPreview = "authenticator-preview"
+	PageAuthenticatorRemark  = "authenticator-remark"
+	PageAuthenticatorUri     = "authenticator-uri"
+	PageAuthenticatorExport  = "authenticator-export"
+	PageAuthenticatorEmpty   = "authenticator-empty"
+	PageAuthenticatorTable   = "authenticator-table"
 
 	PageLimit = 5
 
@@ -41,9 +51,10 @@ var (
 
 type Pocket struct {
 	*tview.Application
-	Pages      *tview.Pages
-	DetailPage *DetailPage
-	ListPage   *ListPage
+	Pages             *tview.Pages
+	DetailPage        *DetailPage
+	ListPage          *ListPage
+	AuthenticatorPage *AuthenticatorPage
 }
 
 func (p *Pocket) ToPage(page string) {
@@ -144,6 +155,11 @@ func NewListPage(pocket *Pocket) *ListPage {
 				UIFetchNotes(pocket, -1)
 			}
 		}).
+		AddItem("Authenticator", "", 'a', func() {
+			pocket.ToPage(PageAuthenticator)
+			pocket.AuthenticatorPage.Load(pocket)
+			pocket.SetFocus(pocket.AuthenticatorPage.Options)
+		}).
 		AddItem("Exit", "", 'q', func() {
 			PopExitPage(pocket)
 		})
@@ -154,6 +170,736 @@ func NewListPage(pocket *Pocket) *ListPage {
 	lp.Flex = cp
 
 	return lp
+}
+
+type AuthenticatorPage struct {
+	*tview.Flex
+	Options *tview.List
+
+	bar     *tview.TextView
+	content *tview.Pages
+	table   *tview.Table
+	empty   *tview.TextView
+	status  *tview.TextView
+
+	entries     []TotpEntry
+	refreshStop chan struct{}
+}
+
+func NewAuthenticatorPage(pocket *Pocket) *AuthenticatorPage {
+	ap := &AuthenticatorPage{}
+
+	ap.bar = tview.NewTextView()
+	ap.bar.SetBorder(true).SetTitle(" Authenticator ")
+	ap.bar.SetTextAlign(tview.AlignCenter)
+
+	ap.table = tview.NewTable().SetSelectable(true, false)
+	ap.table.SetBorder(true).SetTitle(" Entries ")
+	ap.table.SetInputCapture(ap.tableInputCapture(pocket))
+
+	ap.empty = tview.NewTextView()
+	ap.empty.SetBorder(true).SetTitle(" Entries ")
+	ap.empty.SetTextAlign(tview.AlignCenter)
+	ap.empty.SetText("no entries yet\npress a to add from clipboard")
+
+	ap.content = tview.NewPages()
+	ap.content.AddPage(PageAuthenticatorEmpty, ap.empty, true, true)
+	ap.content.AddPage(PageAuthenticatorTable, ap.table, true, false)
+
+	ap.status = tview.NewTextView()
+	ap.status.SetBorder(true)
+	ap.status.SetTextAlign(tview.AlignCenter)
+
+	content := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(ap.bar, 3, 1, false).
+		AddItem(ap.content, 0, 1, true).
+		AddItem(ap.status, 3, 1, false)
+
+	ap.Options = tview.NewList()
+	ap.Options.SetBorder(true).SetTitle(" Options ")
+	ap.Options.ShowSecondaryText(false)
+	ap.Options.SetInputCapture(ap.optionsInputCapture(pocket))
+	ap.Options.AddItem("Add from clipboard", "", 'a', func() {
+		ap.AddFromClipboard(pocket)
+	})
+	ap.Options.AddItem("Select entry", "", 'l', func() {
+		ap.focusTable(pocket)
+	})
+	ap.Options.AddItem("Back to notes", "", 'b', func() {
+		ap.backToNotes(pocket)
+	})
+	ap.Options.AddItem("Exit", "", 'q', func() {
+		PopExitPage(pocket)
+	})
+
+	ap.Flex = NewContentPlane(ap.Options, content)
+	return ap
+}
+
+func (a *AuthenticatorPage) optionsInputCapture(pocket *Pocket) func(*tcell.EventKey) *tcell.EventKey {
+	return func(ev *tcell.EventKey) *tcell.EventKey {
+		a.clearStatus()
+		if ev.Rune() == 'j' {
+			return KeyDownEvt
+		}
+		if ev.Rune() == 'k' {
+			return KeyUpEvt
+		}
+		switch {
+		case ev.Key() == tcell.KeyESC:
+			a.backToNotes(pocket)
+			return nil
+		case ev.Rune() == 'l':
+			a.focusTable(pocket)
+			return nil
+		case ev.Rune() == 'q':
+			PopExitPage(pocket)
+			return nil
+		}
+		return ev
+	}
+}
+
+func (a *AuthenticatorPage) tableInputCapture(pocket *Pocket) func(*tcell.EventKey) *tcell.EventKey {
+	return func(ev *tcell.EventKey) *tcell.EventKey {
+		a.clearStatus()
+		switch {
+		case ev.Key() == tcell.KeyESC || ev.Key() == tcell.KeyLeft || ev.Rune() == 'h' || ev.Rune() == 'q':
+			pocket.SetFocus(a.Options)
+			return nil
+		case ev.Key() == tcell.KeyEnter || ev.Key() == tcell.KeyRight || ev.Rune() == 'l':
+			a.copySelectedCode()
+			return nil
+		case ev.Rune() == 'j':
+			return KeyDownEvt
+		case ev.Rune() == 'k':
+			return KeyUpEvt
+		case ev.Rune() == 'G':
+			n := a.table.GetRowCount()
+			if n > 0 {
+				a.table.Select(n-1, 0)
+				a.table.ScrollToEnd()
+			}
+			return nil
+		case ev.Rune() == 'a':
+			a.AddFromClipboard(pocket)
+			return nil
+		case ev.Rune() == 'e':
+			a.editSelectedRemark(pocket)
+			return nil
+		case ev.Rune() == 'd':
+			a.confirmDeleteSelected(pocket)
+			return nil
+		case ev.Rune() == 'u':
+			a.showSelectedUri(pocket)
+			return nil
+		case ev.Rune() == 'x':
+			a.exportSelected(pocket)
+			return nil
+		}
+		return ev
+	}
+}
+
+func (a *AuthenticatorPage) backToNotes(pocket *Pocket) {
+	a.stopRefresh()
+	pocket.ToPage(PageList)
+	pocket.SetFocus(pocket.ListPage.Options)
+}
+
+func (a *AuthenticatorPage) focusTable(pocket *Pocket) {
+	if len(a.entries) == 0 {
+		return
+	}
+	a.content.SwitchToPage(PageAuthenticatorTable)
+	if row, _ := a.table.GetSelection(); row < 0 || row >= a.table.GetRowCount() {
+		a.table.Select(0, 0)
+	}
+	pocket.SetFocus(a.table)
+}
+
+func (a *AuthenticatorPage) Load(pocket *Pocket) {
+	go func() {
+		entries, err := StFetchTotpEntries()
+		pocket.QueueUpdateDraw(func() {
+			if err != nil {
+				PopMsg(pocket, func() { pocket.SetFocus(a.Options) }, "%s", err.Error())
+				return
+			}
+			a.entries = entries
+			a.render()
+			a.startRefresh(pocket)
+		})
+	}()
+}
+
+func (a *AuthenticatorPage) render() {
+	a.fillTable()
+	if len(a.entries) == 0 {
+		a.content.SwitchToPage(PageAuthenticatorEmpty)
+		return
+	}
+	a.content.SwitchToPage(PageAuthenticatorTable)
+	a.table.Select(0, 0)
+	a.table.ScrollToBeginning()
+}
+
+// renderKeepingSelection rebuilds the rows after a remark edit or a delete and
+// selects row, clamped to the last entry. The scroll offset is left untouched,
+// so the refresh does not jump the table back to the top.
+func (a *AuthenticatorPage) renderKeepingSelection(row int) {
+	a.fillTable()
+	if len(a.entries) == 0 {
+		a.content.SwitchToPage(PageAuthenticatorEmpty)
+		return
+	}
+	a.content.SwitchToPage(PageAuthenticatorTable)
+	if row < 0 {
+		row = 0
+	}
+	if last := a.table.GetRowCount() - 1; row > last {
+		row = last
+	}
+	a.table.Select(row, 0)
+}
+
+func (a *AuthenticatorPage) fillTable() {
+	a.bar.SetText(authHeaderText(len(a.entries)))
+	now := time.Now()
+	a.table.Clear()
+	for i, e := range a.entries {
+		issuer := e.Issuer
+		if issuer == "" && e.Account == "" {
+			issuer = "otpauth"
+		}
+		a.table.SetCell(i, 0, tview.NewTableCell(truncateRunes(issuer, 18)).SetExpansion(1))
+		a.table.SetCell(i, 1, tview.NewTableCell(truncateRunes(e.Account, 26)).SetExpansion(1))
+		a.table.SetCell(i, 2, tview.NewTableCell(e.Remark).SetExpansion(1))
+		a.table.SetCell(i, 3, tview.NewTableCell(codeCellText(e, now)).SetExpansion(1))
+		a.table.SetCell(i, 4, tview.NewTableCell(secondsCellText(e.Period, now)).SetExpansion(1))
+	}
+}
+
+// startRefresh runs a one-second tick while the page is open. A tick is
+// skipped when the page is not the front page, which also covers modals.
+func (a *AuthenticatorPage) startRefresh(pocket *Pocket) {
+	a.stopRefresh()
+	stop := make(chan struct{})
+	a.refreshStop = stop
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				a.refresh(pocket)
+			}
+		}
+	}()
+}
+
+func (a *AuthenticatorPage) stopRefresh() {
+	if a.refreshStop != nil {
+		close(a.refreshStop)
+		a.refreshStop = nil
+	}
+}
+
+func (a *AuthenticatorPage) refresh(pocket *Pocket) {
+	pocket.QueueUpdate(func() {
+		if name, _ := pocket.Pages.GetFrontPage(); name != PageAuthenticator {
+			return
+		}
+		if a.refreshCodes(time.Now()) {
+			pocket.Draw()
+		}
+	})
+}
+
+// refreshCodes updates only the code and seconds cells that changed, so the
+// selection and scroll offset are untouched.
+func (a *AuthenticatorPage) refreshCodes(now time.Time) bool {
+	changed := false
+	for i, e := range a.entries {
+		if setCellTextIfChanged(a.table, i, 3, codeCellText(e, now)) {
+			changed = true
+		}
+		if setCellTextIfChanged(a.table, i, 4, secondsCellText(e.Period, now)) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+func setCellTextIfChanged(table *tview.Table, row, col int, text string) bool {
+	cell := table.GetCell(row, col)
+	if cell == nil || cell.Text == text {
+		return false
+	}
+	cell.SetText(text)
+	return true
+}
+
+func codeCellText(e TotpEntry, now time.Time) string {
+	code, err := GenerateTotpCode(e.Secret, e.Digits, e.Period, e.Algorithm, now)
+	if err != nil {
+		return "decrypt failed"
+	}
+	return formatCode(code)
+}
+
+// truncateRunes shortens s to n runes and marks the cut with an ellipsis, so a
+// multi-byte value is never split mid-rune.
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+func formatCode(code string) string {
+	switch len(code) {
+	case 6:
+		return code[:3] + " " + code[3:]
+	case 8:
+		return code[:4] + " " + code[4:]
+	default:
+		return code
+	}
+}
+
+func secondsCellText(period int, now time.Time) string {
+	if period <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%ds", period-int(now.Unix()%int64(period)))
+}
+
+// selectedRow returns the selected table row and whether it indexes an entry.
+func (a *AuthenticatorPage) selectedRow() (int, bool) {
+	row, _ := a.table.GetSelection()
+	if row < 0 || row >= len(a.entries) {
+		return 0, false
+	}
+	return row, true
+}
+
+func (a *AuthenticatorPage) copySelectedCode() {
+	row, ok := a.selectedRow()
+	if !ok {
+		return
+	}
+	e := a.entries[row]
+	code, err := GenerateTotpCode(e.Secret, e.Digits, e.Period, e.Algorithm, time.Now())
+	if err == nil {
+		err = StWriteClipboard(code)
+	}
+	if err != nil {
+		a.setStatus("couldn't copy code")
+		return
+	}
+	a.setStatus(fmt.Sprintf("copied code for %s: %s", e.Issuer, e.Account))
+}
+
+func (a *AuthenticatorPage) showSelectedUri(pocket *Pocket) {
+	row, ok := a.selectedRow()
+	if !ok {
+		return
+	}
+	uri, err := BuildTotpUri(a.entries[row])
+	if err != nil {
+		a.setStatus("secret can't be decrypted")
+		return
+	}
+	PopAuthenticatorUriPage(pocket, a, uri, func() { pocket.SetFocus(a.table) })
+}
+
+func (a *AuthenticatorPage) exportSelected(pocket *Pocket) {
+	row, ok := a.selectedRow()
+	if !ok {
+		return
+	}
+	e := a.entries[row]
+	uri, err := BuildTotpUri(e)
+	if err != nil {
+		a.setStatus("secret can't be decrypted")
+		return
+	}
+	path, err := defaultExportPath(e)
+	if err != nil {
+		a.setStatus("can't write to that folder")
+		return
+	}
+	PopAuthenticatorExportPage(pocket, a, uri, path, func() { pocket.SetFocus(a.table) })
+}
+
+func (a *AuthenticatorPage) editSelectedRemark(pocket *Pocket) {
+	row, ok := a.selectedRow()
+	if !ok {
+		return
+	}
+	restoreTable := func() { pocket.SetFocus(a.table) }
+	PopAuthenticatorRemarkPage(pocket, a.entries[row], row, restoreTable)
+}
+
+func (a *AuthenticatorPage) confirmDeleteSelected(pocket *Pocket) {
+	row, ok := a.selectedRow()
+	if !ok {
+		return
+	}
+	e := a.entries[row]
+	restoreTable := func() { pocket.SetFocus(a.table) }
+	PopConfirmDialog(pocket, func() {
+		pocket.RemovePage(PageConfirm)
+		restoreTable()
+		go func() {
+			if err := StDeleteTotpEntry(e); err != nil {
+				pocket.QueueUpdateDraw(func() {
+					PopMsg(pocket, restoreTable, "%s", err.Error())
+				})
+				return
+			}
+			entries, err := StFetchTotpEntries()
+			pocket.QueueUpdateDraw(func() {
+				if err != nil {
+					PopMsg(pocket, restoreTable, "%s", err.Error())
+					return
+				}
+				a.applyEntries(pocket, entries, row, fmt.Sprintf("deleted %s: %s", e.Issuer, e.Account))
+			})
+		}()
+	}, deleteConfirmText(e), 60, 15, restoreTable)
+}
+
+// applyEntries replaces the list after a remark edit or a delete and keeps the
+// selection at row, which is the same entry after an edit and the neighbour
+// that took the deleted entry's place after a delete.
+func (a *AuthenticatorPage) applyEntries(pocket *Pocket, entries []TotpEntry, row int, status string) {
+	a.entries = entries
+	a.setStatus(status)
+	a.renderKeepingSelection(row)
+	if len(a.entries) == 0 {
+		pocket.SetFocus(a.Options)
+		return
+	}
+	pocket.SetFocus(a.table)
+}
+
+func (a *AuthenticatorPage) setStatus(msg string) {
+	a.status.SetText(msg)
+}
+
+func (a *AuthenticatorPage) clearStatus() {
+	a.status.SetText("")
+}
+
+func entryCountText(n int) string {
+	if n == 1 {
+		return "1 entry"
+	}
+	return fmt.Sprintf("%d entries", n)
+}
+
+func authHeaderText(n int) string {
+	return entryCountText(n) + " (refresh every 1s)"
+}
+
+func deleteConfirmText(e TotpEntry) string {
+	msg := fmt.Sprintf("Deleting %s: %s", e.Issuer, e.Account)
+	if e.Remark != "" {
+		msg += fmt.Sprintf(" (%s)", e.Remark)
+	}
+	return msg
+}
+
+func (a *AuthenticatorPage) AddFromClipboard(pocket *Pocket) {
+	var returnFocus tview.Primitive = a.Options
+	if a.table.HasFocus() {
+		returnFocus = a.table
+	}
+	restoreFocus := func() { pocket.SetFocus(returnFocus) }
+
+	a.setStatus("reading clipboard...")
+	go func() {
+		parsed, err := ReadTotpFromClipboard()
+		pocket.QueueUpdateDraw(func() {
+			if err != nil {
+				a.clearStatus()
+				PopMsg(pocket, restoreFocus, "%s", importErrorMessage(err))
+				return
+			}
+			a.clearStatus()
+			PopAuthenticatorPreviewPage(pocket, parsed, restoreFocus)
+		})
+	}()
+}
+
+func importErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrHotpUnsupported):
+		return "hotp isn't supported, totp only"
+	case errors.Is(err, ErrSecretInvalid):
+		return "secret isn't valid base32"
+	case errors.Is(err, ErrParamInvalid):
+		return strings.TrimPrefix(err.Error(), ErrParamInvalid.Error()+": ")
+	case errors.Is(err, ErrClipboardEmpty):
+		return "clipboard is empty"
+	case errors.Is(err, ErrQrNotFound), errors.Is(err, ErrQrDecodeFailed):
+		return "no qr code in clipboard image"
+	case errors.Is(err, ErrQrNotTotpUri):
+		return "qr code isn't a totp uri"
+	default:
+		return "clipboard isn't a qr image or otpauth:// uri"
+	}
+}
+
+func PopAuthenticatorPreviewPage(pocket *Pocket, parsed ParsedTotp, onClose func()) {
+	const (
+		labelIssuer    = "Issuer:"
+		labelAccount   = "Account:"
+		labelDigits    = "Digits:"
+		labelPeriod    = "Period:"
+		labelAlgorithm = "Algorithm:"
+		labelRemark    = "Remark:"
+	)
+
+	form := NewForm(false)
+	form.SetBorder(true).SetTitle(" Preview Entry ")
+
+	var issuerItem, accountItem *tview.InputField
+	if parsed.Bare {
+		issuerItem = tview.NewInputField().SetLabel(labelIssuer).SetText(parsed.Issuer)
+		accountItem = tview.NewInputField().SetLabel(labelAccount).SetText(parsed.Account)
+		form.AddFormItem(issuerItem)
+		form.AddFormItem(accountItem)
+	} else {
+		form.AddTextView(labelIssuer, parsed.Issuer, 50, 1, false, false)
+		form.AddTextView(labelAccount, parsed.Account, 50, 1, false, false)
+	}
+	form.AddTextView(labelDigits, cast.ToString(parsed.Digits), 50, 1, false, false)
+	form.AddTextView(labelPeriod, cast.ToString(parsed.Period), 50, 1, false, false)
+	form.AddTextView(labelAlgorithm, parsed.Algorithm, 50, 1, false, false)
+	remarkItem := tview.NewInputField().SetLabel(labelRemark)
+	form.AddFormItem(remarkItem)
+
+	closePopup := func() {
+		pocket.RemovePage(PageAuthenticatorPreview)
+		if onClose != nil {
+			onClose()
+		}
+	}
+
+	save := func() {
+		issuer := parsed.Issuer
+		if issuerItem != nil {
+			issuer = issuerItem.GetText()
+		}
+		account := parsed.Account
+		if accountItem != nil {
+			account = accountItem.GetText()
+		}
+		entry := TotpEntry{
+			Issuer:    issuer,
+			Account:   account,
+			Remark:    remarkItem.GetText(),
+			Secret:    parsed.Secret,
+			Digits:    parsed.Digits,
+			Period:    parsed.Period,
+			Algorithm: parsed.Algorithm,
+			Ctime:     Now(),
+			Utime:     Now(),
+		}
+		go func() {
+			_, err := StCreateTotpEntry(entry)
+			pocket.QueueUpdateDraw(func() {
+				pocket.RemovePage(PageAuthenticatorPreview)
+				if err != nil {
+					PopMsg(pocket, onClose, "%s", err.Error())
+					return
+				}
+				if onClose != nil {
+					onClose()
+				}
+				pocket.AuthenticatorPage.setStatus(fmt.Sprintf("saved %s: %s", entry.Issuer, entry.Account))
+				pocket.AuthenticatorPage.Load(pocket)
+			})
+		}()
+	}
+
+	form.AddButton("Save", save)
+	form.AddButton("Cancel", closePopup)
+	form.SetCancelFunc(closePopup)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if _, button := form.GetFocusedItemIndex(); ev.Key() == tcell.KeyEnter && button < 0 {
+			save()
+			return nil
+		}
+		return ev
+	})
+	form.SetFocus(form.GetFormItemIndex(labelRemark))
+
+	popup := createPopup(form, 14, 80)
+	pocket.Pages.AddPage(PageAuthenticatorPreview, popup, true, true)
+	pocket.SetFocus(form)
+}
+
+func PopAuthenticatorRemarkPage(pocket *Pocket, entry TotpEntry, row int, onClose func()) {
+	const labelRemark = "Remark:"
+
+	form := NewForm(false)
+	form.SetBorder(true).SetTitle(" Edit Remark ")
+
+	remarkItem := tview.NewInputField().SetLabel(labelRemark).SetText(entry.Remark)
+	form.AddFormItem(remarkItem)
+
+	closePopup := func() {
+		pocket.RemovePage(PageAuthenticatorRemark)
+		if onClose != nil {
+			onClose()
+		}
+	}
+
+	save := func() {
+		entry.Remark = remarkItem.GetText()
+		entry.Utime = Now()
+		go func() {
+			if err := StUpdateTotpRemark(entry); err != nil {
+				pocket.QueueUpdateDraw(func() {
+					pocket.RemovePage(PageAuthenticatorRemark)
+					PopMsg(pocket, onClose, "%s", err.Error())
+				})
+				return
+			}
+			entries, err := StFetchTotpEntries()
+			pocket.QueueUpdateDraw(func() {
+				closePopup()
+				if err != nil {
+					PopMsg(pocket, onClose, "%s", err.Error())
+					return
+				}
+				pocket.AuthenticatorPage.applyEntries(pocket, entries, row, "remark updated")
+			})
+		}()
+	}
+
+	form.AddButton("Save", save)
+	form.AddButton("Cancel", closePopup)
+	form.SetCancelFunc(closePopup)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if _, button := form.GetFocusedItemIndex(); ev.Key() == tcell.KeyEnter && button < 0 {
+			save()
+			return nil
+		}
+		return ev
+	})
+	form.SetFocus(form.GetFormItemIndex(labelRemark))
+
+	popup := createPopup(form, 7, 70)
+	pocket.Pages.AddPage(PageAuthenticatorRemark, popup, true, true)
+	pocket.SetFocus(form)
+}
+
+func PopAuthenticatorUriPage(pocket *Pocket, page *AuthenticatorPage, uri string, onClose func()) {
+	form := NewForm(false)
+	form.SetBorder(true).SetTitle(" otpauth URI ")
+
+	closePopup := func() {
+		pocket.RemovePage(PageAuthenticatorUri)
+		if onClose != nil {
+			onClose()
+		}
+	}
+
+	copyUri := func() {
+		if err := StWriteClipboard(uri); err != nil {
+			page.setStatus("couldn't copy uri")
+			return
+		}
+		closePopup()
+		page.setStatus("copied uri")
+	}
+
+	uriItem := tview.NewInputField().SetLabel("URI:").SetText(uri)
+	uriItem.SetDisabled(true)
+	form.AddFormItem(uriItem)
+	form.AddButton("Copy", copyUri)
+	form.AddButton("Close", closePopup)
+	form.SetCancelFunc(closePopup)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Rune() == 'y' {
+			copyUri()
+			return nil
+		}
+		return ev
+	})
+
+	popup := createPopup(form, 9, 120)
+	pocket.Pages.AddPage(PageAuthenticatorUri, popup, true, true)
+	pocket.SetFocus(form.GetButton(0))
+}
+
+func PopAuthenticatorExportPage(pocket *Pocket, page *AuthenticatorPage, uri string, path string, onClose func()) {
+	const (
+		warningText = "this png contains your secret in plaintext"
+		labelPath   = "Path:"
+	)
+
+	form := NewForm(false)
+	form.SetBorder(true).SetTitle(" Export QR PNG ")
+
+	closePopup := func() {
+		pocket.RemovePage(PageAuthenticatorExport)
+		if onClose != nil {
+			onClose()
+		}
+	}
+
+	form.AddFormItem(tview.NewTextView().SetText(warningText).SetSize(1, 0))
+	pathItem := tview.NewInputField().SetLabel(labelPath).SetText(path)
+	form.AddFormItem(pathItem)
+	errItem := tview.NewTextView().SetSize(1, 0)
+	form.AddFormItem(errItem)
+
+	export := func() {
+		target := strings.TrimSpace(pathItem.GetText())
+		err := EncodeQrPng(uri, target)
+		if err == nil {
+			closePopup()
+			page.setStatus(fmt.Sprintf("exported to %s (plaintext)", target))
+			return
+		}
+		if errors.Is(err, ErrFileExists) {
+			errItem.SetText(fmt.Sprintf("file already exists: %s, choose another name", filepath.Base(target)))
+			return
+		}
+		if errors.Is(err, ErrQrEncodeFailed) {
+			errItem.SetText("couldn't encode the qr code")
+			return
+		}
+		errItem.SetText("can't write to that folder")
+	}
+
+	form.AddButton("Export", export)
+	form.AddButton("Cancel", closePopup)
+	form.SetCancelFunc(closePopup)
+	form.SetButtonsAlign(tview.AlignCenter)
+	form.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if _, button := form.GetFocusedItemIndex(); ev.Key() == tcell.KeyEnter && button < 0 {
+			export()
+			return nil
+		}
+		return ev
+	})
+
+	popup := createPopup(form, 13, 90)
+	pocket.Pages.AddPage(PageAuthenticatorExport, popup, true, true)
+	pocket.SetFocus(pathItem)
 }
 
 func PopEditSearchPage(pocket *Pocket) {
@@ -385,8 +1131,12 @@ func NewApp() *Pocket {
 	detailPage := NewDetailPage(pocket)
 	pocket.DetailPage = detailPage
 
+	authenticatorPage := NewAuthenticatorPage(pocket)
+	pocket.AuthenticatorPage = authenticatorPage
+
 	pages.AddPage(PageDetail, detailPage, true, true)
 	pages.AddPage(PageList, listPage, true, true)
+	pages.AddPage(PageAuthenticator, authenticatorPage, true, false)
 	PopPasswordPage(pocket)
 	app.SetRoot(pages, true)
 
@@ -931,9 +1681,14 @@ func PopExitPage(pocket *Pocket) {
 	PopConfirmDialog(pocket, func() { pocket.Stop() }, "Exit Pocket?", 40, 15)
 }
 
-func PopConfirmDialog(pocket *Pocket, confirm func(), msg string, width int, height int) {
+func PopConfirmDialog(pocket *Pocket, confirm func(), msg string, width int, height int, onClosed ...func()) {
 	form := NewForm(false)
-	close := func() { pocket.RemovePage(PageConfirm) }
+	close := func() {
+		pocket.RemovePage(PageConfirm)
+		for _, f := range onClosed {
+			f()
+		}
+	}
 	form.AddTextView("", msg, width, height-10, false, true)
 	if confirm == nil {
 		confirm = close

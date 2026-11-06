@@ -4,10 +4,10 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The remark key opens a form; saving updates the row and the list immediately, and cancelling changes nothing.
-- [ ] The delete key asks for confirmation naming the entry, including its remark when one is set.
-- [ ] Confirming deletes the row and cancelling keeps it.
-- [ ] After a delete, focus stays on the neighbouring entry and the header count updates.
-- [ ] Tests cover the storage update and delete paths.
+- [x] The remark key opens a form; saving updates the row and the list immediately, and cancelling changes nothing.
+- [x] The delete key asks for confirmation naming the entry, including its remark when one is set.
+- [x] Confirming deletes the row and cancelling keeps it.
+- [x] After a delete, focus stays on the neighbouring entry and the header count updates.
+- [x] Tests cover the storage update and delete paths.
