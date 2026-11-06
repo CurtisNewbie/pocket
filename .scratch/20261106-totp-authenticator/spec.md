@@ -24,8 +24,8 @@ An Authenticator page inside pocket. The user captures a QR screenshot to the ma
 10. As the notebook's owner, I want each row to show the seconds left in the period, so that I know whether a code will still be accepted when I type it.
 11. As the notebook's owner, I want Enter on a row to copy its code to the clipboard, so that I can paste it into the website.
 12. As the notebook's owner, I want the list to refresh every second without moving my focus or scroll position, so that navigation stays stable while codes roll over.
-13. As the notebook's owner, I want to edit an entry's remark after creation, so that I can add context I skipped at import time.
-14. As the notebook's owner, I want issuer, account, secret, and parameters to be immutable after creation, so that I cannot silently break a working entry.
+13. As the notebook's owner, I want to edit an entry's account and remark after creation, so that I can fix a mislabelled login or add context I skipped at import time.
+14. As the notebook's owner, I want issuer, secret, and parameters to be immutable after creation, so that I cannot silently break a working entry.
 15. As the notebook's owner, I want deleting an entry to require confirmation, so that a stray keypress does not lose a secret that cannot be re-imported without the phone.
 16. As the notebook's owner, I want an entry's URI popup to show its full otpauth URI, so that I can copy it into another authenticator app.
 17. As the notebook's owner, I want exporting a QR PNG to ask for a path and default to a known directory, so that I can scan the code with another device.
@@ -74,8 +74,8 @@ An Authenticator page inside pocket. The user captures a QR screenshot to the ma
 
 ### Entry actions
 
-- Remark is editable through a small form; the change is persisted immediately.
-- Issuer, account, secret, digits, period, and algorithm are not editable. Replacing a secret means deleting the entry and importing again.
+- Account and remark are editable through a small form; the change is persisted immediately.
+- Issuer, secret, digits, period, and algorithm are not editable. Replacing a secret means deleting the entry and importing again.
 - Delete asks for confirmation, then removes the row.
 
 ### Export
@@ -104,7 +104,7 @@ The page keeps two focus contexts, the Options list on the left and the entry ta
 | Table | j, k, Down, Up | Move the selection |
 | Table | G | Jump to the last entry |
 | Table | Enter, l, Right | Copy the selected entry's current code |
-| Table | e | Edit the selected entry's remark |
+| Table | e | Edit the selected entry's account and remark |
 | Table | d | Delete the selected entry, after confirmation |
 | Table | u | Show the selected entry's otpauth URI |
 | Table | x | Export the selected entry as a QR PNG |
@@ -120,7 +120,7 @@ The Options list offers six items, add from clipboard, select an entry, copy the
 
 A row shows issuer, account, remark, the current code, and the seconds left. Each identity column shows its own value, so a single empty side needs no fallback. When both are empty the issuer column shows `otpauth`. Long issuer and account values are truncated by rune count with an ellipsis. Six-digit codes display as two groups of three and eight-digit codes as two groups of four, while a copied code carries no grouping. The header shows the entry count and the refresh cadence. The empty state reads "no entries yet" and "press a to add from clipboard". The table scrolls natively and never paginates.
 
-The entry list is built when the page opens and rebuilt only after an add, a delete, or a remark edit. A refresh tick runs once per second, reads the clock afresh instead of counting down, writes only the code and seconds cells whose text changed, and wraps the writes in one queued redraw. Because only cell text changes, the selection and the scroll offset survive. A tick is skipped while the page is not visible or a modal is open, and the next tick refreshes the page when it becomes visible again. The status line starts with the hint `enter copy  e remark  d delete  u uri  x qr`; a status message returns to that hint on the next keypress, not on a timer.
+The entry list is built when the page opens and rebuilt only after an add, a delete, or an edit. A refresh tick runs once per second, reads the clock afresh instead of counting down, writes only the code and seconds cells whose text changed, and wraps the writes in one queued redraw. Because only cell text changes, the selection and the scroll offset survive. A tick is skipped while the page is not visible or a modal is open, and the next tick refreshes the page when it becomes visible again. The status line starts with the hint `enter copy  e remark  d delete  u uri  x qr`; a status message returns to that hint on the next keypress, not on a timer.
 
 Messages appear in one of three places.
 
@@ -140,7 +140,7 @@ Messages appear in one of three places.
 | Form | couldn't encode the qr code |
 | Status line | copied code for <issuer>: <account> |
 | Status line | saved <issuer>: <account> |
-| Status line | remark updated |
+| Status line | entry updated |
 | Status line | deleted <issuer>: <account> |
 | Status line | exported to <path> (plaintext) |
 | Status line | reading clipboard... |
@@ -149,7 +149,7 @@ Messages appear in one of three places.
 | Status line | couldn't copy uri |
 | Status line | secret can't be decrypted |
 
-The preview form shows issuer, account, digits, period, algorithm, and an editable remark. Issuer and account are editable only when the import came from a bare Base32 secret. All fields except remark are read-only otherwise. The delete confirmation names the entry and includes its remark when one is set. The URI popup shows the full URI in a read-only field and copies it from there.
+The preview form shows issuer, account, digits, period, algorithm, and an editable remark. Issuer and account are editable only when the import came from a bare Base32 secret, and all fields except remark are read-only otherwise. The edit form offers the account and remark; the account may be empty. The delete confirmation names the entry and includes its remark when one is set. The URI popup shows the full URI in a read-only field and copies it from there.
 
 ### Dependencies
 
@@ -212,7 +212,7 @@ The failure codes are `uri-invalid`, `hotp-unsupported`, `secret-invalid`, and `
 
 **otpauth build** takes a stored entry and the decrypted secret and returns a URI that round-trips through the parser. Its failure code is `secret-undecryptable`.
 
-The storage functions (create, list, update remark, delete) follow the notebook's existing storage-contract indirection so tests can substitute them. The failure codes are `db-write-failed`, `db-read-failed`, and `db-delete-failed`.
+The storage functions (create, list, update the account and remark, delete) follow the notebook's existing storage-contract indirection so tests can substitute them. The failure codes are `db-write-failed`, `db-read-failed`, and `db-delete-failed`.
 
 **Clipboard write** copies text. Its failure code is `clipboard-write-failed`.
 
@@ -273,7 +273,7 @@ No operation retries automatically. A failed clipboard read or QR decode require
 - Windows or Linux clipboard support.
 - Rendering a QR code inside the terminal.
 - Batch export, import, or migration from other authenticator apps.
-- Editing a secret, issuer, account, or TOTP parameter after creation.
+- Editing a secret, issuer, or TOTP parameter after creation.
 - Search, filtering, folders, or tags on the Authenticator page.
 - Re-locking the app, auto-lock, or a second password prompt for the page.
 - Changing the master password or its key derivation.
