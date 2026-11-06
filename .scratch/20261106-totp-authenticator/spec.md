@@ -96,6 +96,8 @@ The page keeps two focus contexts, the Options list on the left and the entry ta
 | Options | Enter | Run the selected option |
 | Options | a | Add from clipboard |
 | Options | l | Move focus to the entry table |
+| Options | u | Show the selected entry's otpauth URI |
+| Options | x | Export the selected entry as a QR PNG |
 | Options | b | Return to the notebook list |
 | Options | q | Exit the app, after the existing exit confirmation |
 | Options | Esc | Return to the notebook list |
@@ -114,11 +116,11 @@ The page keeps two focus contexts, the Options list on the left and the entry ta
 | URI popup | Enter, y | Copy the URI |
 | URI popup | Esc | Close |
 
-The Options list offers four items, add from clipboard, select an entry, back to notes, and exit. The per-entry actions live on the table, so they always have a selected entry to act on.
+The Options list offers six items, add from clipboard, select an entry, copy the URI, export a QR PNG, back to notes, and exit. The two export items act on the table's selected row, so they work without moving focus to the table. With no entries, both report "nothing to export, add an entry first".
 
 A row shows issuer, account, remark, the current code, and the seconds left. Each identity column shows its own value, so a single empty side needs no fallback. When both are empty the issuer column shows `otpauth`. Long issuer and account values are truncated by rune count with an ellipsis. Six-digit codes display as two groups of three and eight-digit codes as two groups of four, while a copied code carries no grouping. The header shows the entry count and the refresh cadence. The empty state reads "no entries yet" and "press a to add from clipboard". The table scrolls natively and never paginates.
 
-The entry list is built when the page opens and rebuilt only after an add, a delete, or a remark edit. A refresh tick runs once per second, reads the clock afresh instead of counting down, writes only the code and seconds cells whose text changed, and wraps the writes in one queued redraw. Because only cell text changes, the selection and the scroll offset survive. A tick is skipped while the page is not visible or a modal is open, and the next tick refreshes the page when it becomes visible again. A status line message returns to the default text on the next keypress, not on a timer.
+The entry list is built when the page opens and rebuilt only after an add, a delete, or a remark edit. A refresh tick runs once per second, reads the clock afresh instead of counting down, writes only the code and seconds cells whose text changed, and wraps the writes in one queued redraw. Because only cell text changes, the selection and the scroll offset survive. A tick is skipped while the page is not visible or a modal is open, and the next tick refreshes the page when it becomes visible again. The status line starts with the hint `enter copy  e remark  d delete  u uri  x qr`; a status message returns to that hint on the next keypress, not on a timer.
 
 Messages appear in one of three places.
 
