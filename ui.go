@@ -39,6 +39,8 @@ const (
 	LabelName    = "Name:"
 	LabelDesc    = "Description:"
 	LabelContent = "Content:"
+
+	statusHint = "enter copy  e remark  d delete  u uri  x qr"
 )
 
 var (
@@ -209,6 +211,7 @@ func NewAuthenticatorPage(pocket *Pocket) *AuthenticatorPage {
 	ap.status = tview.NewTextView()
 	ap.status.SetBorder(true)
 	ap.status.SetTextAlign(tview.AlignCenter)
+	ap.status.SetText(statusHint)
 
 	content := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(ap.bar, 3, 1, false).
@@ -224,6 +227,12 @@ func NewAuthenticatorPage(pocket *Pocket) *AuthenticatorPage {
 	})
 	ap.Options.AddItem("Select entry", "", 'l', func() {
 		ap.focusTable(pocket)
+	})
+	ap.Options.AddItem("Copy URI", "", 'u', func() {
+		ap.showSelectedUri(pocket)
+	})
+	ap.Options.AddItem("Export QR PNG", "", 'x', func() {
+		ap.exportSelected(pocket)
 	})
 	ap.Options.AddItem("Back to notes", "", 'b', func() {
 		ap.backToNotes(pocket)
@@ -505,6 +514,7 @@ func (a *AuthenticatorPage) copySelectedCode() {
 func (a *AuthenticatorPage) showSelectedUri(pocket *Pocket) {
 	row, ok := a.selectedRow()
 	if !ok {
+		a.setStatus("nothing to export, add an entry first")
 		return
 	}
 	uri, err := BuildTotpUri(a.entries[row])
@@ -512,12 +522,14 @@ func (a *AuthenticatorPage) showSelectedUri(pocket *Pocket) {
 		a.setStatus("secret can't be decrypted")
 		return
 	}
-	PopAuthenticatorUriPage(pocket, a, uri, func() { pocket.SetFocus(a.table) })
+	returnFocus := a.returnFocus()
+	PopAuthenticatorUriPage(pocket, a, uri, func() { pocket.SetFocus(returnFocus) })
 }
 
 func (a *AuthenticatorPage) exportSelected(pocket *Pocket) {
 	row, ok := a.selectedRow()
 	if !ok {
+		a.setStatus("nothing to export, add an entry first")
 		return
 	}
 	e := a.entries[row]
@@ -531,7 +543,17 @@ func (a *AuthenticatorPage) exportSelected(pocket *Pocket) {
 		a.setStatus("can't write to that folder")
 		return
 	}
-	PopAuthenticatorExportPage(pocket, a, uri, path, func() { pocket.SetFocus(a.table) })
+	returnFocus := a.returnFocus()
+	PopAuthenticatorExportPage(pocket, a, uri, path, func() { pocket.SetFocus(returnFocus) })
+}
+
+// returnFocus reports the pane that invoked an entry action, so closing its
+// popup returns focus there instead of always moving to the table.
+func (a *AuthenticatorPage) returnFocus() tview.Primitive {
+	if a.table.HasFocus() {
+		return a.table
+	}
+	return a.Options
 }
 
 func (a *AuthenticatorPage) editSelectedRemark(pocket *Pocket) {
@@ -591,7 +613,7 @@ func (a *AuthenticatorPage) setStatus(msg string) {
 }
 
 func (a *AuthenticatorPage) clearStatus() {
-	a.status.SetText("")
+	a.status.SetText(statusHint)
 }
 
 func entryCountText(n int) string {
