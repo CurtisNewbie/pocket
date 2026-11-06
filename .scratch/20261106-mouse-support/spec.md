@@ -80,7 +80,7 @@ The mouse contract, by what sits under the pointer. Left button down means the p
 | Pointer target | Left button down | Left click |
 |---|---|---|
 | Note card | Focus the card | Open the note |
-| Menu entry | Focus the menu | Run the entry |
+| Menu entry | Ignored | Focus the menu and run the entry |
 | Dialog button | Focus the button | Press the button |
 | Dialog input field | Ignored | Ignored |
 | Dialog box, outside any control | Focus the dialog's last focused control | Ignored |
