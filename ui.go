@@ -408,13 +408,11 @@ func (a *AuthenticatorPage) stopRefresh() {
 }
 
 func (a *AuthenticatorPage) refresh(pocket *Pocket) {
-	pocket.QueueUpdate(func() {
+	pocket.QueueUpdateDraw(func() {
 		if name, _ := pocket.Pages.GetFrontPage(); name != PageAuthenticator {
 			return
 		}
-		if a.refreshCodes(time.Now()) {
-			pocket.Draw()
-		}
+		a.refreshCodes(time.Now())
 	})
 }
 

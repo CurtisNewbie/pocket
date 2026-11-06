@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 func TestTruncateRunes(t *testing.T) {
@@ -50,5 +53,47 @@ func TestDeleteConfirmTextNamesEntry(t *testing.T) {
 	e.Remark = "work"
 	if got, want := deleteConfirmText(e), "Deleting GitHub: alice@example.com (work)"; got != want {
 		t.Fatalf("deleteConfirmText() with a remark = %q, want %q", got, want)
+	}
+}
+
+func TestAuthenticatorRefreshDoesNotBlockEventLoop(t *testing.T) {
+	app := tview.NewApplication()
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatal(err)
+	}
+	screen.SetSize(80, 25)
+	app.SetScreen(screen)
+
+	pocket := &Pocket{Application: app, Pages: tview.NewPages()}
+	a := NewAuthenticatorPage(pocket)
+	pocket.AuthenticatorPage = a
+	pocket.Pages.AddPage(PageAuthenticator, a, true, true)
+	a.entries = []TotpEntry{{
+		Issuer:    "GitHub",
+		Account:   "alice",
+		Secret:    "JBSWY3DPEHPK3PXP",
+		Digits:    6,
+		Period:    30,
+		Algorithm: "SHA1",
+	}}
+	a.fillTable()
+	// Force the next refresh to change a cell, which is the path that used to
+	// call Draw from inside a queued update and deadlock the event loop.
+	a.table.GetCell(0, 4).SetText("999s")
+
+	app.SetRoot(pocket.Pages, true)
+	go func() { _ = app.Run() }()
+	defer func() { go app.Stop() }()
+
+	done := make(chan struct{})
+	go func() {
+		a.refresh(pocket)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("refresh blocked the tview event loop")
 	}
 }
