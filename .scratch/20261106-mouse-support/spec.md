@@ -37,7 +37,7 @@ Mouse reporting is on whenever Pocket runs. Clicking a control does what that co
 - Inert areas drop the left-button-down action. A static text view, a non-selectable table, a title bar, a status line, and the version line all belong here. Dropping only the button-down is enough because focus changes on button-down, while a click action is derived later from the release.
 - A dialog's input fields drop the left-button-down action. Buttons inside the same dialog keep theirs, so the dialog stays usable by mouse.
 - A click on an authenticator table row selects the row and copies that entry's code, matching Enter. The copy goes through the substitutable clipboard writer the import and export flows already use.
-- Wheel events are not handled. The app does not scroll with the mouse, and content longer than the screen stays a keyboard job.
+- Wheel events are not part of this feature. A widget that scrolled with the wheel before still does, and no widget gains a new wheel behaviour. A note card's whole region absorbs pointer events it does not otherwise act on, so nothing behind the card scrolls. Content longer than the screen stays a keyboard job.
 - Pointer movement is not handled. There is no hover highlight.
 - Clicking and dragging text in the terminal becomes the terminal's mouse drag while Pocket runs; users hold the terminal's selection modifier to select text.
 
@@ -53,7 +53,7 @@ The second seam tests the dialog shield on its own. The shield is a primitive wh
 
 Prior art sits in the existing UI and authenticator tests. The UI test starts a simulation screen, runs the application in a goroutine, and asserts that the event loop keeps moving. The authenticator tests substitute the clipboard writer and the schema initializer.
 
-Every ticket adds its test first, watches it fail for the right reason, then makes it pass.
+Every ticket adds its test first. Where the library already behaves correctly, the test pins that behaviour as a guard instead of failing first, and says so in the ticket.
 
 ## Out of Scope
 
@@ -77,17 +77,19 @@ N/A, no stored data changes.
 
 The mouse contract, by what sits under the pointer. Left button down means the press, left click means a press and release on the same cell.
 
-| Pointer target | Left button down | Left click | Wheel |
-|---|---|---|---|
-| Note card | Focus the card | Open the note | Ignored |
-| Menu entry | Focus the menu | Run the entry | Ignored |
-| Dialog button | Focus the button | Press the button | Ignored |
-| Dialog input field | Ignored | Ignored | Ignored |
-| Dialog box, outside any control | Focus the dialog's last focused control | Ignored | Ignored |
-| Dialog margin, outside the box | Consumed, reaches nothing | Consumed, reaches nothing | Ignored |
-| Static text view | Ignored | Ignored | Ignored |
-| Non-selectable table | Ignored | Ignored | Ignored |
-| Authenticator table row | Focus the table | Select the row and copy its code | Ignored |
+| Pointer target | Left button down | Left click |
+|---|---|---|
+| Note card | Focus the card | Open the note |
+| Menu entry | Focus the menu | Run the entry |
+| Dialog button | Focus the button | Press the button |
+| Dialog input field | Ignored | Ignored |
+| Dialog box, outside any control | Focus the dialog's last focused control | Ignored |
+| Dialog margin, outside the box | Consumed, reaches nothing | Consumed, reaches nothing |
+| Static text view | Ignored | Ignored |
+| Non-selectable table | Ignored | Ignored |
+| Authenticator table row | Focus the table | Select the row and copy its code |
+
+Every other pointer action is left to the target's default, except on a note card, whose region absorbs anything it does not act on.
 
 ### Config
 
