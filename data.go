@@ -19,10 +19,10 @@ var (
 	StCheckPassword func() (bool, error)                                        = CheckPassword
 	StInitSchema    func() error                                                = InitSchema
 
-	StCreateTotpEntry  func(e TotpEntry) (TotpEntry, error) = CreateTotpEntry
-	StFetchTotpEntries func() ([]TotpEntry, error)          = FetchTotpEntries
-	StUpdateTotpRemark func(e TotpEntry) error              = UpdateTotpRemark
-	StDeleteTotpEntry  func(e TotpEntry) error              = DeleteTotpEntry
+	StCreateTotpEntry            func(e TotpEntry) (TotpEntry, error) = CreateTotpEntry
+	StFetchTotpEntries           func() ([]TotpEntry, error)          = FetchTotpEntries
+	StUpdateTotpAccountAndRemark func(e TotpEntry) error              = UpdateTotpAccountAndRemark
+	StDeleteTotpEntry            func(e TotpEntry) error              = DeleteTotpEntry
 )
 
 var (
@@ -321,14 +321,14 @@ func FetchTotpEntries() ([]TotpEntry, error) {
 	return entries, nil
 }
 
-func UpdateTotpRemark(e TotpEntry) error {
+func UpdateTotpAccountAndRemark(e TotpEntry) error {
 	err := GetDB().Exec(`
 	UPDATE pocket_totp
-	SET remark = ?, utime = ?
+	SET account = ?, remark = ?, utime = ?
 	WHERE id = ?
-	`, e.Remark, e.Utime, e.Id).Error
+	`, e.Account, e.Remark, e.Utime, e.Id).Error
 	if err != nil {
-		return fmt.Errorf("db-write-failed, failed to update totp remark, %v", err)
+		return fmt.Errorf("db-write-failed, failed to update totp entry, %v", err)
 	}
 	return nil
 }

@@ -422,21 +422,32 @@ func TestFetchTotpEntriesToleratesUndecryptableSecret(t *testing.T) {
 	}
 }
 
-func TestUpdateTotpRemark(t *testing.T) {
+func TestUpdateTotpAccountAndRemark(t *testing.T) {
 	openTestDB(t)
 	if err := InitSchema(); err != nil {
 		t.Fatal(err)
 	}
 
-	created, err := CreateTotpEntry(testTotpEntry("GitHub", "JBSWY3DPEHPK3PXP", Now()))
+	original := testTotpEntry("GitHub", "JBSWY3DPEHPK3PXP", Now())
+	original.Remark = "work"
+	original.Digits = 8
+	original.Period = 60
+	original.Algorithm = "SHA256"
+	created, err := CreateTotpEntry(original)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	var storedSecretBefore string
+	if err := GetDB().Raw(`SELECT secret FROM pocket_totp WHERE id = ?`, created.Id).Scan(&storedSecretBefore).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	created.Account = "alice@work.example"
 	created.Remark = "personal"
 	updated := ETime(time.Date(2026, 11, 6, 10, 30, 0, 0, time.UTC))
 	created.Utime = updated
-	if err := UpdateTotpRemark(created); err != nil {
+	if err := UpdateTotpAccountAndRemark(created); err != nil {
 		t.Fatal(err)
 	}
 
@@ -447,8 +458,37 @@ func TestUpdateTotpRemark(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("got %d entries, want 1", len(entries))
 	}
-	if entries[0].Remark != "personal" {
-		t.Fatalf("remark = %q, want %q", entries[0].Remark, "personal")
+	e := entries[0]
+	if e.Account != "alice@work.example" {
+		t.Fatalf("account = %q, want %q", e.Account, "alice@work.example")
+	}
+	if e.Remark != "personal" {
+		t.Fatalf("remark = %q, want %q", e.Remark, "personal")
+	}
+
+	// The editable fields change; identity and generation parameters do not.
+	if e.Issuer != original.Issuer {
+		t.Fatalf("issuer = %q, want %q", e.Issuer, original.Issuer)
+	}
+	if e.Secret != original.Secret {
+		t.Fatalf("secret = %q, want %q", e.Secret, original.Secret)
+	}
+	if e.Digits != original.Digits {
+		t.Fatalf("digits = %d, want %d", e.Digits, original.Digits)
+	}
+	if e.Period != original.Period {
+		t.Fatalf("period = %d, want %d", e.Period, original.Period)
+	}
+	if e.Algorithm != original.Algorithm {
+		t.Fatalf("algorithm = %q, want %q", e.Algorithm, original.Algorithm)
+	}
+
+	var storedSecretAfter string
+	if err := GetDB().Raw(`SELECT secret FROM pocket_totp WHERE id = ?`, created.Id).Scan(&storedSecretAfter).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedSecretAfter != storedSecretBefore {
+		t.Fatal("update rewrote the stored secret")
 	}
 
 	// utime is a DATETIME column, which go-sqlite3 only parses back into a time

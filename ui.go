@@ -28,7 +28,7 @@ const (
 	PageAuthenticator = "authenticator"
 
 	PageAuthenticatorPreview = "authenticator-preview"
-	PageAuthenticatorRemark  = "authenticator-remark"
+	PageAuthenticatorEdit    = "authenticator-edit"
 	PageAuthenticatorUri     = "authenticator-uri"
 	PageAuthenticatorExport  = "authenticator-export"
 	PageAuthenticatorEmpty   = "authenticator-empty"
@@ -294,7 +294,7 @@ func (a *AuthenticatorPage) tableInputCapture(pocket *Pocket) func(*tcell.EventK
 			a.AddFromClipboard(pocket)
 			return nil
 		case ev.Rune() == 'e':
-			a.editSelectedRemark(pocket)
+			a.editSelectedEntry(pocket)
 			return nil
 		case ev.Rune() == 'd':
 			a.confirmDeleteSelected(pocket)
@@ -353,7 +353,7 @@ func (a *AuthenticatorPage) render() {
 	a.table.ScrollToBeginning()
 }
 
-// renderKeepingSelection rebuilds the rows after a remark edit or a delete and
+// renderKeepingSelection rebuilds the rows after an edit or a delete and
 // selects row, clamped to the last entry. The scroll offset is left untouched,
 // so the refresh does not jump the table back to the top.
 func (a *AuthenticatorPage) renderKeepingSelection(row int) {
@@ -556,13 +556,13 @@ func (a *AuthenticatorPage) returnFocus() tview.Primitive {
 	return a.Options
 }
 
-func (a *AuthenticatorPage) editSelectedRemark(pocket *Pocket) {
+func (a *AuthenticatorPage) editSelectedEntry(pocket *Pocket) {
 	row, ok := a.selectedRow()
 	if !ok {
 		return
 	}
 	restoreTable := func() { pocket.SetFocus(a.table) }
-	PopAuthenticatorRemarkPage(pocket, a.entries[row], row, restoreTable)
+	PopAuthenticatorEditPage(pocket, a.entries[row], row, restoreTable)
 }
 
 func (a *AuthenticatorPage) confirmDeleteSelected(pocket *Pocket) {
@@ -594,7 +594,7 @@ func (a *AuthenticatorPage) confirmDeleteSelected(pocket *Pocket) {
 	}, deleteConfirmText(e), 60, 15, restoreTable)
 }
 
-// applyEntries replaces the list after a remark edit or a delete and keeps the
+// applyEntries replaces the list after an edit or a delete and keeps the
 // selection at row, which is the same entry after an edit and the neighbour
 // that took the deleted entry's place after a delete.
 func (a *AuthenticatorPage) applyEntries(pocket *Pocket, entries []TotpEntry, row int, status string) {
@@ -767,29 +767,35 @@ func PopAuthenticatorPreviewPage(pocket *Pocket, parsed ParsedTotp, onClose func
 	pocket.SetFocus(form)
 }
 
-func PopAuthenticatorRemarkPage(pocket *Pocket, entry TotpEntry, row int, onClose func()) {
-	const labelRemark = "Remark:"
+func PopAuthenticatorEditPage(pocket *Pocket, entry TotpEntry, row int, onClose func()) {
+	const (
+		labelAccount = "Account:"
+		labelRemark  = "Remark:"
+	)
 
 	form := NewForm(false)
-	form.SetBorder(true).SetTitle(" Edit Remark ")
+	form.SetBorder(true).SetTitle(" Edit Entry ")
 
+	accountItem := tview.NewInputField().SetLabel(labelAccount).SetText(entry.Account)
+	form.AddFormItem(accountItem)
 	remarkItem := tview.NewInputField().SetLabel(labelRemark).SetText(entry.Remark)
 	form.AddFormItem(remarkItem)
 
 	closePopup := func() {
-		pocket.RemovePage(PageAuthenticatorRemark)
+		pocket.RemovePage(PageAuthenticatorEdit)
 		if onClose != nil {
 			onClose()
 		}
 	}
 
 	save := func() {
+		entry.Account = accountItem.GetText()
 		entry.Remark = remarkItem.GetText()
 		entry.Utime = Now()
 		go func() {
-			if err := StUpdateTotpRemark(entry); err != nil {
+			if err := StUpdateTotpAccountAndRemark(entry); err != nil {
 				pocket.QueueUpdateDraw(func() {
-					pocket.RemovePage(PageAuthenticatorRemark)
+					pocket.RemovePage(PageAuthenticatorEdit)
 					PopMsg(pocket, onClose, "%s", err.Error())
 				})
 				return
@@ -801,7 +807,7 @@ func PopAuthenticatorRemarkPage(pocket *Pocket, entry TotpEntry, row int, onClos
 					PopMsg(pocket, onClose, "%s", err.Error())
 					return
 				}
-				pocket.AuthenticatorPage.applyEntries(pocket, entries, row, "remark updated")
+				pocket.AuthenticatorPage.applyEntries(pocket, entries, row, "entry updated")
 			})
 		}()
 	}
@@ -817,10 +823,10 @@ func PopAuthenticatorRemarkPage(pocket *Pocket, entry TotpEntry, row int, onClos
 		}
 		return ev
 	})
-	form.SetFocus(form.GetFormItemIndex(labelRemark))
+	form.SetFocus(form.GetFormItemIndex(labelAccount))
 
-	popup := createPopup(form, 7, 70)
-	pocket.Pages.AddPage(PageAuthenticatorRemark, popup, true, true)
+	popup := createPopup(form, 9, 70)
+	pocket.Pages.AddPage(PageAuthenticatorEdit, popup, true, true)
 	pocket.SetFocus(form)
 }
 

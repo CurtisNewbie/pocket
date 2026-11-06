@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The edit key opens a form with the current account and remark prefilled.
-- [ ] Saving a new account updates the row and the exported otpauth URI label, and the generated code is unchanged.
-- [ ] Cancelling changes nothing.
-- [ ] The storage update writes the account, remark, and update time, and leaves the secret and parameters untouched; a test covers the storage seam.
-- [ ] The status line reports "entry updated".
+- [x] The edit key opens a form with the current account and remark prefilled.
+- [x] Saving a new account updates the row and the exported otpauth URI label, and the generated code is unchanged.
+- [x] Cancelling changes nothing.
+- [x] The storage update writes the account, remark, and update time, and leaves the secret and parameters untouched; a test covers the storage seam.
+- [x] The status line reports "entry updated".
