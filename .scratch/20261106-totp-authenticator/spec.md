@@ -120,7 +120,7 @@ The Options list offers six items, add from clipboard, select an entry, copy the
 
 A row shows issuer, account, remark, the current code, and the seconds left. Each identity column shows its own value, so a single empty side needs no fallback. When both are empty the issuer column shows `otpauth`. Long issuer and account values are truncated by rune count with an ellipsis. Six-digit codes display as two groups of three and eight-digit codes as two groups of four, while a copied code carries no grouping. The header shows the entry count and the refresh cadence. The empty state reads "no entries yet" and "press a to add from clipboard". The table scrolls natively and never paginates.
 
-The entry list is built when the page opens and rebuilt only after an add, a delete, or an edit. A refresh tick runs once per second, reads the clock afresh instead of counting down, writes only the code and seconds cells whose text changed, and wraps the writes in one queued redraw. Because only cell text changes, the selection and the scroll offset survive. A tick is skipped while the page is not visible or a modal is open, and the next tick refreshes the page when it becomes visible again. The status line starts with the hint `enter copy  e remark  d delete  u uri  x qr`; a status message returns to that hint on the next keypress, not on a timer.
+The entry list is built when the page opens and rebuilt only after an add, a delete, or an edit. A refresh tick runs once per second, reads the clock afresh instead of counting down, writes only the code and seconds cells whose text changed, and wraps the writes in one queued redraw. Because only cell text changes, the selection and the scroll offset survive. A tick is skipped while the page is not visible or a modal is open, and the next tick refreshes the page when it becomes visible again. The status line starts with the hint `enter copy  e edit  d delete  u uri  x qr`; a status message returns to that hint on the next keypress, not on a timer.
 
 Messages appear in one of three places.
 
@@ -174,7 +174,7 @@ The preview form shows issuer, account, digits, period, algorithm, and an editab
 | period | INTEGER | no | 30 | Seconds per code, from 1 to 3600 |
 | algorithm | TEXT | no | `SHA1` | `SHA1`, `SHA256`, or `SHA512` |
 | ctime | DATETIME | no | none | Creation time |
-| utime | DATETIME | no | none | Last remark change |
+| utime | DATETIME | no | none | Last account or remark change |
 
 Index intent. Reading the list scans the table ordered by `ctime DESC, id DESC`. No additional index is introduced for a table of this size, and no uniqueness constraint exists on issuer or account.
 
