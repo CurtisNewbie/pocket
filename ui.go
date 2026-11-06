@@ -40,7 +40,7 @@ const (
 	LabelDesc    = "Description:"
 	LabelContent = "Content:"
 
-	statusHint = "enter copy  e remark  d delete  u uri  x qr"
+	statusHint = "enter copy  e edit  d delete  u uri  x qr"
 )
 
 var (

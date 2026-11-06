@@ -466,6 +466,18 @@ func TestUpdateTotpAccountAndRemark(t *testing.T) {
 		t.Fatalf("remark = %q, want %q", e.Remark, "personal")
 	}
 
+	uri, err := BuildTotpUri(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParseTotpText(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Account != "alice@work.example" {
+		t.Fatalf("exported uri account = %q, want %q", parsed.Account, "alice@work.example")
+	}
+
 	// The editable fields change; identity and generation parameters do not.
 	if e.Issuer != original.Issuer {
 		t.Fatalf("issuer = %q, want %q", e.Issuer, original.Issuer)
