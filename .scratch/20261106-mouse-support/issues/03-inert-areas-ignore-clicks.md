@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Clicking any inert area leaves the app's focus on the control that held it.
-- [ ] After such a click, the page's keys are still handled (returning to the options list, editing, searching, and paging all still work).
-- [ ] Interactive areas on the same pages keep their click behaviour.
-- [ ] A simulation-screen test clicks an inert area with nothing focused, then with a card focused, and asserts focus in both cases; it fails before the change.
+- [x] Clicking any inert area leaves the app's focus on the control that held it.
+- [x] After such a click, the page's keys are still handled (returning to the options list, editing, searching, and paging all still work).
+- [x] Interactive areas on the same pages keep their click behaviour.
+- [x] A simulation-screen test clicks an inert area with nothing focused, then with a card focused, and asserts focus in both cases; it fails before the change.

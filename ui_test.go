@@ -83,8 +83,7 @@ func TestAuthenticatorRefreshDoesNotBlockEventLoop(t *testing.T) {
 	a.table.GetCell(0, 4).SetText("999s")
 
 	app.SetRoot(pocket.Pages, true)
-	go func() { _ = app.Run() }()
-	defer func() { go app.Stop() }()
+	startMouseTestLoop(t, app)
 
 	done := make(chan struct{})
 	go func() {

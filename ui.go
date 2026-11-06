@@ -178,11 +178,11 @@ type AuthenticatorPage struct {
 	*tview.Flex
 	Options *tview.List
 
-	bar     *tview.TextView
+	bar     *inertTextView
 	content *tview.Pages
 	table   *tview.Table
-	empty   *tview.TextView
-	status  *tview.TextView
+	empty   *inertTextView
+	status  *inertTextView
 
 	entries     []TotpEntry
 	refreshStop chan struct{}
@@ -191,7 +191,7 @@ type AuthenticatorPage struct {
 func NewAuthenticatorPage(pocket *Pocket) *AuthenticatorPage {
 	ap := &AuthenticatorPage{}
 
-	ap.bar = tview.NewTextView()
+	ap.bar = newInertTextView()
 	ap.bar.SetBorder(true).SetTitle(" Authenticator ")
 	ap.bar.SetTextAlign(tview.AlignCenter)
 
@@ -199,7 +199,7 @@ func NewAuthenticatorPage(pocket *Pocket) *AuthenticatorPage {
 	ap.table.SetBorder(true).SetTitle(" Entries ")
 	ap.table.SetInputCapture(ap.tableInputCapture(pocket))
 
-	ap.empty = tview.NewTextView()
+	ap.empty = newInertTextView()
 	ap.empty.SetBorder(true).SetTitle(" Entries ")
 	ap.empty.SetTextAlign(tview.AlignCenter)
 	ap.empty.SetText("no entries yet\npress a to add from clipboard")
@@ -208,7 +208,7 @@ func NewAuthenticatorPage(pocket *Pocket) *AuthenticatorPage {
 	ap.content.AddPage(PageAuthenticatorEmpty, ap.empty, true, true)
 	ap.content.AddPage(PageAuthenticatorTable, ap.table, true, false)
 
-	ap.status = tview.NewTextView()
+	ap.status = newInertTextView()
 	ap.status.SetBorder(true)
 	ap.status.SetTextAlign(tview.AlignCenter)
 	ap.status.SetText(statusHint)
@@ -381,11 +381,11 @@ func (a *AuthenticatorPage) fillTable() {
 		if issuer == "" && e.Account == "" {
 			issuer = "otpauth"
 		}
-		a.table.SetCell(i, 0, tview.NewTableCell(truncateRunes(issuer, 18)).SetExpansion(1))
-		a.table.SetCell(i, 1, tview.NewTableCell(truncateRunes(e.Account, 26)).SetExpansion(1))
-		a.table.SetCell(i, 2, tview.NewTableCell(e.Remark).SetExpansion(1))
-		a.table.SetCell(i, 3, tview.NewTableCell(codeCellText(e, now)).SetExpansion(1))
-		a.table.SetCell(i, 4, tview.NewTableCell(secondsCellText(e.Period, now)).SetExpansion(1))
+		a.table.SetCell(i, 0, a.authenticatorCell(truncateRunes(issuer, 18), i))
+		a.table.SetCell(i, 1, a.authenticatorCell(truncateRunes(e.Account, 26), i))
+		a.table.SetCell(i, 2, a.authenticatorCell(e.Remark, i))
+		a.table.SetCell(i, 3, a.authenticatorCell(codeCellText(e, now), i))
+		a.table.SetCell(i, 4, a.authenticatorCell(secondsCellText(e.Period, now), i))
 	}
 }
 
@@ -1093,7 +1093,8 @@ func PopCreateNotePage(pocket *Pocket, onConfirm func()) {
 	pocket.Pages.AddPage(PageCreate, popup, true, true)
 }
 
-func createPopup(form tview.Primitive, height int, width int) tview.Primitive {
+func createPopup(form *tview.Form, height int, width int) tview.Primitive {
+	ignoreDialogFieldClicks(form)
 	modal := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
@@ -1101,7 +1102,7 @@ func createPopup(form tview.Primitive, height int, width int) tview.Primitive {
 			AddItem(form, height, 1, true).
 			AddItem(nil, 0, 1, false), width, 1, true).
 		AddItem(nil, 0, 1, false)
-	return modal
+	return newMouseShield(modal, form)
 }
 
 type DetailPage struct {
@@ -1165,6 +1166,7 @@ func NewApp() *Pocket {
 	pages.AddPage(PageAuthenticator, authenticatorPage, true, false)
 	PopPasswordPage(pocket)
 	app.SetRoot(pages, true)
+	app.EnableMouse(true)
 
 	return pocket
 }
@@ -1174,7 +1176,7 @@ func NewContentPlane(options tview.Primitive, content tview.Primitive) *tview.Fl
 		AddItem(options, 30, 1, true).
 		AddItem(content, 0, 4, false)
 
-	ver := tview.NewTextView()
+	ver := newInertTextView()
 	ver.SetBorder(true)
 	ver.SetText(fmt.Sprintf("Pocket %v by yongjie.zhuang", Version))
 	ver.SetTextAlign(tview.AlignCenter)
@@ -1209,13 +1211,13 @@ func NewOptionList(extendedCap func(event *tcell.EventKey) (*tcell.EventKey, boo
 type DetailView struct {
 	flex *tview.Flex
 
-	bar     *tview.TextView
+	bar     *inertTextView
 	id      *tview.TableCell
 	name    *tview.TableCell
 	ctime   *tview.TableCell
 	utime   *tview.TableCell
 	desc    *tview.TableCell
-	content *tview.TextView
+	content *inertTextView
 
 	Item   Note
 	Masked bool
@@ -1262,13 +1264,13 @@ func NewDetailView(pocket *Pocket) (iv *DetailView) {
 	topFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 
 	iv = new(DetailView)
-	iv.bar = tview.NewTextView()
+	iv.bar = newInertTextView()
 	iv.bar.SetBorder(true)
 	iv.bar.SetText(" ")
 	iv.bar.SetTextAlign(tview.AlignCenter)
 	topFlex.AddItem(iv.bar, 3, 1, false)
 
-	tb := tview.NewTable()
+	tb := newInertTable()
 	tb.SetBorder(true).SetTitle(" Info ")
 
 	r := 0
@@ -1306,7 +1308,7 @@ func NewDetailView(pocket *Pocket) (iv *DetailView) {
 
 	topFlex.AddItem(infp, 0, 1, false)
 
-	iv.content = tview.NewTextView()
+	iv.content = newInertTextView()
 	iv.content.SetBorder(true).SetTitle(" Content ")
 	iv.content.SetChangedFunc(func() { pocket.Draw() })
 
@@ -1320,12 +1322,13 @@ func NewDetailView(pocket *Pocket) (iv *DetailView) {
 }
 
 type ListView struct {
-	flex    *tview.Flex
-	bar     *tview.TextView  // top bar
-	name    *tview.TableCell // searched name
-	page    *tview.TableCell // at page (1-based)
-	total   *tview.TableCell // total
-	content *tview.Flex      // content of the list view, contains N note items
+	flex     *tview.Flex
+	bar      *inertTextView   // top bar
+	name     *tview.TableCell // searched name
+	page     *tview.TableCell // at page (1-based)
+	total    *tview.TableCell // total
+	content  *tview.Flex      // content of the list view, contains N note items
+	openNote func(Note)       // opens a note, set when the view is built
 
 	pageNum int
 }
@@ -1333,6 +1336,7 @@ type ListView struct {
 type ListItemPrimitive struct {
 	*tview.Table
 	Note
+	onOpen func()
 }
 
 func (l *ListView) ClearNotes() {
@@ -1344,6 +1348,9 @@ func (l *ListView) AddNote(it Note) {
 	lip := new(ListItemPrimitive)
 	lip.Table = tb
 	lip.Note = it
+	if l.openNote != nil {
+		lip.onOpen = func() { l.openNote(it) }
+	}
 	tb.SetBorder(true)
 
 	tb.SetCellSimple(0, 0, "Id:")
@@ -1376,13 +1383,14 @@ func NewListView(pocket *Pocket, extendCap func(lv *ListView, event *tcell.Event
 
 	iv = new(ListView)
 	iv.pageNum = 1
-	iv.bar = tview.NewTextView()
+	iv.openNote = func(it Note) { openNote(pocket, it) }
+	iv.bar = newInertTextView()
 	iv.bar.SetText(`Notes`)
 	iv.bar.SetBorder(true)
 	iv.bar.SetTextAlign(tview.AlignCenter)
 	topFlex.AddItem(iv.bar, 3, 1, false)
 
-	tb := tview.NewTable()
+	tb := newInertTable()
 	tb.SetBorder(true).SetTitle(" Searching Parameters ")
 
 	tb.SetCellSimple(0, 1, "Name:")
@@ -1426,8 +1434,7 @@ func NewListView(pocket *Pocket, extendCap func(lv *ListView, event *tcell.Event
 			if ok {
 				itm := iv.content.GetItem(j)
 				lip := itm.(*ListItemPrimitive)
-				pocket.DetailPage.Display(lip.Note)
-				pocket.Pages.SwitchToPage(PageDetail)
+				openNote(pocket, lip.Note)
 			}
 			return nil
 		}

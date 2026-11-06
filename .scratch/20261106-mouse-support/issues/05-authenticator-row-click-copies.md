@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A click on an authenticator row selects that row.
-- [ ] The same click copies that entry's current code through the substitutable clipboard writer and reports it on the status line.
-- [ ] A click inside the table but outside a row, and a click while the page shows no entries, copies nothing and reports nothing.
-- [ ] A simulation-screen test stubs the clipboard writer, clicks a row at coordinates taken from the table, and asserts the copied text and the selected row; it fails before the change.
-- [ ] Keyboard Enter on a focused row still copies as before.
+- [x] A click on an authenticator row selects that row.
+- [x] The same click copies that entry's current code through the substitutable clipboard writer and reports it on the status line.
+- [x] A click inside the table but outside a row, and a click while the page shows no entries, copies nothing and reports nothing.
+- [x] A simulation-screen test stubs the clipboard writer, clicks a row at coordinates taken from the table, and asserts the copied text and the selected row; it fails before the change.
+- [x] Keyboard Enter on a focused row still copies as before.
