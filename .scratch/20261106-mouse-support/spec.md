@@ -32,7 +32,7 @@ Mouse reporting is on whenever Pocket runs. Clicking a control does what that co
 
 - Mouse reporting is enabled when the application starts. There is no flag, environment variable, or settings entry, and no runtime toggle.
 - Each widget keeps the library's native click behaviour, so a menu entry runs on a single click and a button fires on a single click. No confirm step is added to a menu entry.
-- A note card gets its own mouse handling. A click on it opens the note exactly as Enter does, and sets focus to the card itself rather than to the table inside it, so every key the card handles still reaches it afterwards.
+- A note card gets its own mouse handling. A press on it moves focus to the card itself, never to the table inside it, and a click opens the note exactly as Enter does. The detail page then takes focus the way it does after Enter, so focus never sits on the record list while that list is no longer visible.
 - A dialog's outermost primitive absorbs pointer events. Any event whose position falls outside the dialog's box is consumed there, so no page behind the dialog receives it.
 - Inert areas drop the left-button-down action. A static text view, a non-selectable table, a title bar, a status line, and the version line all belong here. Dropping only the button-down is enough because focus changes on button-down, while a click action is derived later from the release.
 - A dialog's input fields drop the left-button-down action. Buttons inside the same dialog keep theirs, so the dialog stays usable by mouse.

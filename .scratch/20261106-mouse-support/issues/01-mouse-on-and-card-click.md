@@ -8,6 +8,7 @@
 
 - [ ] Starting the app enables terminal mouse reporting, and the app runs with mouse reporting unavailable exactly as before.
 - [ ] A click on a note card opens that note on the detail page, the same result Enter gives on the focused card.
-- [ ] After that click, focus is the card, so a following key press is handled by the record list (a down key moves the selection, a left key returns to the options list).
+- [ ] After that click, focus is where Enter leaves it (the detail page's options list), so the detail page keys work; focus never lands on the card's inner table.
+- [ ] A press on a card, with no click following, leaves focus on the card itself rather than on its inner table.
 - [ ] A test on the simulation-screen seam clicks a note card at coordinates taken from the card's rectangle and asserts the front page and the focused control; it fails before the change.
 - [ ] The existing test suite passes unchanged.
